@@ -280,6 +280,18 @@ library
     BNFC.Backend.TreeSitter.CFtoTreeSitter
     BNFC.Backend.TreeSitter.RegToJSReg
 
+    -- SV backend
+    BNFC.Backend.SV
+    BNFC.Backend.SV.PrettyPrinter
+    BNFC.Backend.SV.Makefile
+    BNFC.Backend.SV.Naming
+    BNFC.Backend.SV.CFtoYacc
+    BNFC.Backend.SV.CFtoAbs
+    BNFC.Backend.SV.Utils
+    BNFC.Backend.SV.CFtoInterp
+    BNFC.Backend.SV.CFtoLex
+    BNFC.ErrM
+
 ----- Testing --------------------------------------------------------------
 
 test-suite unit-tests

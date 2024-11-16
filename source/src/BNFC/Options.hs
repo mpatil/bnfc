@@ -65,6 +65,7 @@ data Target = TargetC | TargetCpp | TargetCppNoStl
             | TargetJava | TargetOCaml | TargetPygments
             | TargetTreeSitter
             | TargetCheck
+            | TargetSV
   deriving (Eq, Bounded, Enum, Ord)
 
 -- | List of Haskell target.
@@ -83,6 +84,7 @@ instance Show Target where
   show TargetPygments     = "Pygments"
   show TargetTreeSitter   = "Tree-sitter"
   show TargetCheck        = "Check LBNF file"
+  show TargetSV           = "SystemVerilog"
 
 -- | Which version of Alex is targeted?
 data AlexVersion = Alex3
@@ -262,6 +264,7 @@ printTargetOption = ("--" ++) . \case
   TargetPygments    -> "pygments"
   TargetTreeSitter  -> "tree-sitter"
   TargetCheck       -> "check"
+  TargetSV          -> "sv"
 
 printAlexOption :: AlexVersion -> String
 printAlexOption = ("--" ++) . \case
@@ -316,6 +319,8 @@ targetOptions =
     "Output grammar.js file for use with tree-sitter"
   , Option "" ["check"]         (NoArg (\ o -> o{target = TargetCheck }))
     "No output. Just check input LBNF file"
+  , Option "" ["sv"]         (NoArg (\ o -> o{target = TargetSV }))
+    "Output SV code for use with FLex and Bison"
   ]
 
 -- | A list of the options and for each of them, the target language
@@ -326,7 +331,7 @@ specificOptions =
         [ "Add and set line_number field for all syntax classes"
         , "(Note: Java requires cup version 0.11b-2014-06-11 or greater.)"
         ]
-    , [TargetC, TargetCpp, TargetJava] )
+    , [TargetC, TargetCpp, TargetJava, TargetSV] )
   , ( Option [] ["ansi"] (NoArg (\o -> o{ ansi = Ansi })) $ unlines
         [ "Restrict to ANSI language standard"
         ]
@@ -531,6 +536,7 @@ instance Maintained Target where
     TargetPygments    -> True
     TargetTreeSitter  -> True
     TargetCheck       -> True
+    TargetSV          -> True
 
 instance Maintained AlexVersion where
   printFeature = printAlexOption
