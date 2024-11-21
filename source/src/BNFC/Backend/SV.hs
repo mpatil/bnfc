@@ -36,7 +36,7 @@ makeSV opts cf = do
     let (prinH, prinC) = cf2SVPrinter True (inPackage opts) cf
     mkfile "Printer.svh" commentWithEmacsModeHint prinH
     mkfile "Printer.sv" commentWithEmacsModeHint prinC
-    mkfile "Test.sv" commentWithEmacsModeHint (svtest name)
+    mkfile "Test.sv" commentWithEmacsModeHint (svtest cf name)
     Makefile.mkMakefile (optMake opts) $ makefile name prefix
     mkfile (name ++ "_pkg.sv") commentWithEmacsModeHint (svpkg name)
     mkfile (name ++ ".core") ("CAPI=2:\n# " ++) (fusesoc name)
@@ -57,7 +57,7 @@ comment x = unwords ["/*", x, "*/"]
 commentWithEmacsModeHint :: String -> String
 commentWithEmacsModeHint = comment . ("-*- sv -*- " ++)
 
-svtest name =
+svtest cf name =
   unlines
    [
     "/****************************************************************************/",
@@ -72,14 +72,17 @@ svtest name =
     "program automatic test;",
     "",
     "  initial begin : prog",
-    "    string filename;",
-    "    automatic Program parse_tree;",
+    "    automatic string filename = \"test.w\";",
+    "    automatic string test_str = \"\";",
+    "    automatic " ++ def ++ " parse_tree;",
     "    automatic Interp i = new();",
     "    automatic PrintAbsyn p = new();",
     "    automatic ShowAbsyn q = new();",
     "",
     "    if ($value$plusargs(\"input=%s\", filename))",
-    "      parse_tree = pProgram(filename);",
+    "      parse_tree = p" ++ dat ++ "(filename);",
+    "    else",
+    "      parse_tree = ps" ++ dat ++ "(test_str);",
     "    if (parse_tree) begin",
     "",
     "      p.print(parse_tree);",
@@ -94,6 +97,10 @@ svtest name =
     "endprogram",
     ""
    ]
+  where
+   cat = firstEntry cf
+   dat = identCat $ normCat cat
+   def = identCat cat
 
 svpkg name =
   unlines
@@ -122,7 +129,7 @@ fusesoc name =
    [   "name: \"lib:interp:" ++ name ++ "\""
     ,  "description: \"interp lib\""
     ,  "filesets:"
-    ,  "  files_dv:"
+    ,  "  pkg:"
     ,  "    files:"
     ,  ""
     ,  "      - Absyn.svh: {is_include_file: true}"
@@ -138,14 +145,43 @@ fusesoc name =
     ,  "      - " ++ name ++ "_pkg.sv"
     ,  "    file_type: systemVerilogSource"
     ,  ""
+    ,  "  tb:"
+    ,  "    files:"
+    ,  "      - Test.sv"
+    ,  "    file_type: systemVerilogSource"
+    ,  ""
     ,  "targets:"
     ,  "  default: &default"
     ,  "    filesets:"
-    ,  "      - files_dv"
+    ,  "      - pkg"
+    ,  ""
+    ,  "  sim: &sim"
+    ,  "    <<: *default"
+    ,  "    description: Simulate the design"
+    ,  "    default_tool: modelsim"
+    ,  "    filesets_append:"
+    ,  "      - tb"
+    ,  "    tools:"
+    ,  "      vcs:"
+    ,  "        vcs_options:"
+    ,  "          - -g2012"
+    ,  "      xsim:"
+    ,  "        xelab_options:"
+    ,  "          - \"--debug all\""
+    ,  "      modelsim:"
+    ,  "        vlog_options:"
+    ,  "          - \"--debug all\""
     ,  ""
     ,  "  test:"
-    ,  "    <<: *default"
+    ,  "    <<: *sim"
     ,  "    toplevel: tb_top"
     ,  "    default_tool: vcs"
+    ,  "    parameters:"
+    ,  "      - input=test.w"
+    ,  ""
+    ,  "parameters:"
+    ,  "  input:"
+    ,  "    datatype: str"
+    ,  "    paramtype: plusarg"
     ,  ""
    ]

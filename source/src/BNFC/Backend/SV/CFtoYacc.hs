@@ -150,17 +150,15 @@ parseMethod _ _ cf cat = unlines $ concat
   , [ "endfunction" ]
   , [ ""
     , unwords [ "/* Entrypoint: parse", dat, "from string. */" ]
-    , "`ifdef XXX"
-    , "function int ps" ++ parser ++ "(string str);"
+    , "function " ++ cat' ++ " ps" ++ parser ++ "(string str);"
     ]
   , body True
-  , [ "endfunction"
-    , "`endif" ]
+  , [ "endfunction" ]
   ]
   where
   cat' = identCat (normCat cat)
   body stringParser = concat
-    [ [ "  b = Bopen(filename, `OREAD);"
+    [ [ if stringParser then "  b = Bopens(str);" else "  b = Bopen(filename, `OREAD);"
       , "  yy_mylinenumber = 1;"
       , "  initialize_lexer(0);"
       , "  if (yyparse())"
