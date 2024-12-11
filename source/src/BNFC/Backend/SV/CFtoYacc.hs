@@ -52,12 +52,14 @@ cf2Yacc rp inPackage name cf env = unlines
     , declarations cf
     , startSymbol cf
     , "%{"
-    , "//`include \"Lexer.svh\""
+    , "//"
     , "%}"
     , ""
     , "%%"
     , prRules $ rulesForYacc rp inPackage cf env
     , "%%"
+    , ""
+    , "endclass"
     , ""
     , nsStart inPackage
     , entryCode inPackage name cf
@@ -76,9 +78,10 @@ header inPackage _ cf = unlines
     , "%{"
     , "`include \"Absyn.svh\""
     , "`include \"bio.svh\""
-    , "`include \"Lexer.svh\""
     , ""
-    , "Biobuf b;"
+    , "class Parser;"
+    , "  Biobuf b;"
+    , "`include \"Lexer.svh\""
     , ""
     , "typedef struct { int i; } YY_BUFFER_STATE;"
     , ""
@@ -158,13 +161,14 @@ parseMethod _ _ cf cat = unlines $ concat
   where
   cat' = identCat (normCat cat)
   body stringParser = concat
-    [ [ if stringParser then "  b = Bopens(str);" else "  b = Bopen(filename, `OREAD);"
-      , "  yy_mylinenumber = 1;"
-      , "  initialize_lexer(0);"
-      , "  if (yyparse())"
+    [ [ "automatic Parser p = new();"
+      , if stringParser then "  p.b = Bopens(str);" else "  p.b = Bopen(filename, `OREAD);"
+      , "  p.yy_mylinenumber = 1;"
+      , "  p.initialize_lexer(0);"
+      , "  if (p.yyparse())"
       , "    return null; /* Failure */"
       , "  else"
-      , "    return" +++ resultName cat' ++ ";/* Success */"
+      , "    return p." ++ resultName cat' ++ ";/* Success */"
       ]
     ]
   ncat   = normCat cat
