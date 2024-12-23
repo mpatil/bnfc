@@ -73,15 +73,15 @@ positionCats :: CF -> [String]
 positionCats cf = [ wpThing name | TokenReg name True _ <- cfgPragmas cf ]
 
 header :: Maybe String -> String -> CF -> String
-header inPackage _ cf = unlines
+header inPackage name cf = unlines
     [ "/*************************************************/"
     , "%{"
-    , "`include \"Absyn.svh\""
+    , "`include \"" ++ name ++ "/" ++ name ++ "Absyn.svh\""
     , "`include \"bio.svh\""
     , ""
     , "class Parser;"
     , "  Biobuf b;"
-    , "`include \"Lexer.svh\""
+    , "`include \"" ++ name ++ "/" ++ name ++ "Lexer.svh\""
     , ""
     , "typedef struct { int i; } YY_BUFFER_STATE;"
     , ""

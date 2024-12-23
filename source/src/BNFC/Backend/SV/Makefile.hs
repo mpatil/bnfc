@@ -24,28 +24,29 @@ makefile name _ basename = vcat
     , mkRule "all" ["qrun"]
       []
     , mkRule "clean" []
-      [ "rm -rf Parser.svh Lexer.svh qrun.out test-vcs" ]
+      [ "rm -rf " ++ name ++ "Parser.svh " ++ name ++ "Lexer.svh qrun.out test-vcs" ]
     , mkRule "distclean" ["clean"]
       [ "rm -f " ++ unwords
-        [ "Absyn.svh", "Absyn.sv"
+        [ name ++ "/" ++ name ++ "Absyn.svh", name ++ "/" ++ name ++ "Absyn.sv"
         , name ++ ".l", name ++ ".y"
-        , "Printer.sv", "Printer.svh"
-        , "Interp.sv", "Interp.svh"
+        , name ++ "/" ++ name ++ "Printer.sv", name ++ "/" ++ name ++ "Printer.svh"
+        , name ++ "/" ++ name ++ "Interp.sv", name ++ "/" ++ name ++ "Interp.svh"
         , "Test.sv", name ++ "_pkg.sv"
         , name ++ ".core", "comp.log", "modelsim.ini"
-        , "*.bak", "y.output"
+        , name ++ "/*.bak", name ++ "/y.output"
         , basename, name ++ ".tex"
         ]
       ]
     , ".PHONY: qrun"
     , mkRule "qrun" [ "fusesoc", "Test.sv" ]
       [ "${QRUN} ${QRUN_OPTS} " ++ "-F test-vcs/lib_interp_" ++ name ++ "_0.scr Test.sv +input=test.w" ]
-    , mkRule "Lexer.svh" [ name ++ ".l" ]
+    , mkRule (name ++ "/" ++ name ++ "Lexer.svh") [ name ++ ".l" ]
       [ "${SVLEX} ${SVLEX_OPTS} " ++ name ++ ".l"
-      , "mv lex.yy.v Lexer.svh" ]
-    , mkRule "Parser.svh" [ name ++ ".y" ]
-      [ "${SVACC} ${SVACC_OPTS} " ++ name ++ ".y" ]
+      , "mv lex.yy.v " ++ name ++ "/" ++ name ++ "Lexer.svh" ]
+    , mkRule (name ++ "/" ++ name ++ "Parser.svh") [ name ++ ".y" ]
+      [ "${SVACC} ${SVACC_OPTS} " ++ name ++ ".y"
+      , "mv Parser.svh " ++ name ++ "/" ++ name ++ "Parser.svh "]
     , ".PHONY: fusesoc"
-    , mkRule "fusesoc" ["Parser.svh", "Lexer.svh" ]
+    , mkRule "fusesoc" [name ++ "/" ++ name ++ "Parser.svh", name ++ "/" ++ name ++ "Lexer.svh" ]
       [ "fusesoc --cores-root . run --no-export --target=test --build-root=. --setup lib:interp:" ++ name ]
     ]

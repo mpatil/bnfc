@@ -5,6 +5,7 @@ module BNFC.Backend.SV (makeSV,) where
 
 import Prelude hiding ((<>))
 
+import Data.Char (toUpper)
 import Data.Foldable (toList)
 
 import BNFC.Utils
@@ -24,22 +25,22 @@ import BNFC.Backend.SV.Utils
 makeSV :: SharedOptions -> CF -> MkFiles ()
 makeSV opts cf = do
     let (hfile, cfile) = cf2SVAbs (linenumbers opts) (inPackage opts) name cf
-    mkfile "Absyn.svh" commentWithEmacsModeHint hfile
-    mkfile "Absyn.sv" commentWithEmacsModeHint cfile
+    mkfile (name ++ "/" ++ name ++ "Absyn.svh") commentWithEmacsModeHint hfile
+    mkfile (name ++ "/" ++ name ++ "Absyn.sv") commentWithEmacsModeHint cfile
     let (flex, env) = cf2lex (inPackage opts) name cf
     mkfile (name ++ ".l") commentWithEmacsModeHint flex
     let bison = cf2Yacc (linenumbers opts) (inPackage opts) name cf env
     mkfile (name ++ ".y") commentWithEmacsModeHint bison
-    let (skelH, skelC) = cf2Interp (inPackage opts) cf
-    mkfile "Interp.svh" commentWithEmacsModeHint skelH
-    mkfile "Interp.sv" commentWithEmacsModeHint skelC
-    let (prinH, prinC) = cf2SVPrinter True (inPackage opts) cf
-    mkfile "Printer.svh" commentWithEmacsModeHint prinH
-    mkfile "Printer.sv" commentWithEmacsModeHint prinC
+    let (skelH, skelC) = cf2Interp (inPackage opts) name cf
+    mkfile (name ++ "/" ++ name ++ "Interp.svh") commentWithEmacsModeHint skelH
+    mkfile (name ++ "/" ++ name ++ "Interp.sv") commentWithEmacsModeHint skelC
+    let (prinH, prinC) = cf2SVPrinter True (inPackage opts) name cf
+    mkfile (name ++ "/" ++ name ++ "Printer.svh") commentWithEmacsModeHint prinH
+    mkfile (name ++ "/" ++ name ++ "Printer.sv") commentWithEmacsModeHint prinC
     mkfile "Test.sv" commentWithEmacsModeHint (svtest cf name)
     Makefile.mkMakefile (optMake opts) $ makefile name prefix
-    mkfile (name ++ "_pkg.sv") commentWithEmacsModeHint (svpkg name)
-    mkfile (name ++ ".core") ("CAPI=2:\n# " ++) (fusesoc name)
+    mkfile (name ++ "/" ++ name ++ "_pkg.sv") commentWithEmacsModeHint (svpkg name)
+    mkfile (name ++ "/" ++ name ++ ".core") ("CAPI=2:\n# " ++) (fusesoc name)
   where
     name :: String
     name = lang opts
@@ -105,19 +106,19 @@ svtest cf name =
 svpkg name =
   unlines
    [  ""
-    , "`ifndef _SVIO_PKG_SVH"
-    , "`define _SVIO_PKG_SVH"
+    , "`ifndef " ++ (map toUpper name) ++ "_SVIO_PKG_SVH"
+    , "`define " ++ (map toUpper name) ++ "_SVIO_PKG_SVH"
     , ""
     , "package " ++ name ++ "_pkg;"
     , ""
-    , "`include \"Absyn.svh\""
-    , "`include \"Parser.svh\""
-    , "`include \"Interp.svh\""
-    , "`include \"Printer.svh\""
+    , "`include \"" ++ name ++ "/" ++ name ++ "Absyn.svh\""
+    , "`include \"" ++ name ++ "/" ++ name ++ "Parser.svh\""
+    , "`include \"" ++ name ++ "/" ++ name ++ "Interp.svh\""
+    , "`include \"" ++ name ++ "/" ++ name ++ "Printer.svh\""
     , ""
-    , "`include \"Absyn.sv\""
-    , "`include \"Interp.sv\""
-    , "`include \"Printer.sv\""
+    , "`include \"" ++ name ++ "/" ++ name ++ "Absyn.sv\""
+    , "`include \"" ++ name ++ "/" ++ name ++ "Interp.sv\""
+    , "`include \"" ++ name ++ "/" ++ name ++ "Printer.sv\""
     , ""
     , "endpackage"
     , ""
@@ -132,22 +133,22 @@ fusesoc name =
     ,  "  pkg:"
     ,  "    files:"
     ,  ""
-    ,  "      - Absyn.svh: {is_include_file: true}"
-    ,  "      - Interp.svh: {is_include_file: true}"
-    ,  "      - Lexer.svh: {is_include_file: true}"
-    ,  "      - Printer.svh: {is_include_file: true}"
+    ,  "      - " ++ name ++ "Absyn.svh: {is_include_file: true}"
+    ,  "      - " ++ name ++ "Interp.svh: {is_include_file: true}"
+    ,  "      - " ++ name ++ "Lexer.svh: {is_include_file: true}"
+    ,  "      - " ++ name ++ "Printer.svh: {is_include_file: true}"
     ,  "      - bio.svh: {is_include_file: true}"
-    ,  "      - Parser.svh: {is_include_file: true}"
-    ,  "      - Absyn.sv: {is_include_file: true}"
-    ,  "      - Interp.sv: {is_include_file: true}"
-    ,  "      - Printer.sv: {is_include_file: true}"
+    ,  "      - " ++ name ++ "Parser.svh: {is_include_file: true}"
+    ,  "      - " ++ name ++ "Absyn.sv: {is_include_file: true}"
+    ,  "      - " ++ name ++ "Interp.sv: {is_include_file: true}"
+    ,  "      - " ++ name ++ "Printer.sv: {is_include_file: true}"
     ,  ""
     ,  "      - " ++ name ++ "_pkg.sv"
     ,  "    file_type: systemVerilogSource"
     ,  ""
     ,  "  tb:"
     ,  "    files:"
-    ,  "      - Test.sv"
+    ,  "      - ../Test.sv"
     ,  "    file_type: systemVerilogSource"
     ,  ""
     ,  "targets:"

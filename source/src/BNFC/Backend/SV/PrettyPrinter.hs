@@ -6,7 +6,7 @@ module BNFC.Backend.SV.PrettyPrinter (cf2SVPrinter, prRender) where
 import Prelude hiding ((<>))
 
 import Data.Bifunctor (second)
-import Data.Char (toLower, ord)
+import Data.Char (toLower, toUpper, ord)
 import Text.Printf
 
 import BNFC.CF
@@ -17,9 +17,9 @@ import BNFC.Backend.SV.Utils
 import BNFC.PrettyPrint
 
 --Produces (.H file, .C file)
-cf2SVPrinter :: Bool -> Maybe String -> CF -> (String, String)
-cf2SVPrinter _ inPackage cf =
-    (mkHFile inPackage cf groups, mkCFile inPackage cf groups)
+cf2SVPrinter :: Bool -> Maybe String -> String -> CF -> (String, String)
+cf2SVPrinter _ inPackage name cf =
+    (mkHFile inPackage name cf groups, mkCFile inPackage name cf groups)
  where
     groups = positionRules cf ++ fixCoercions (ruleGroupsInternals cf)
 
@@ -32,8 +32,8 @@ positionRules cf =
 {- **** Header (.h) File Methods **** -}
 
 --An extremely large function to make the Header File
-mkHFile :: Maybe String -> CF -> [(Cat,[Rule])] -> String
-mkHFile inPackage cf groups = unlines
+mkHFile :: Maybe String -> String-> CF -> [(Cat,[Rule])] -> String
+mkHFile inPackage name cf groups = unlines
   [ printHeader
   , contentPrint
   , classFooter
@@ -45,10 +45,10 @@ mkHFile inPackage cf groups = unlines
   where
   printHeader = unlines
    [
-    "`ifndef " ++ hdef,
-    "`define " ++ hdef,
+    "`ifndef " ++ (map toUpper name) ++ "_" ++ hdef,
+    "`define " ++ (map toUpper name) ++ "_" ++ hdef,
     "",
-    "`include \"Absyn.svh\"",
+    "`include \"" ++ name ++ "/" ++ name ++ "Absyn.svh\"",
     nsStart inPackage,
     "/* Certain applications may improve performance by changing the buffer size */",
     "`define " ++ nsDefine inPackage "BUFFER_INITIAL" ++ " 2000",
@@ -136,8 +136,8 @@ prRuleH _ = ""
 {- **** Implementation (.sv) File Methods **** -}
 
 --This makes the .sv file by a similar method.
-mkCFile :: Maybe String -> CF -> [(Cat,[Rule])] -> String
-mkCFile inPackage cf groups = concat
+mkCFile :: Maybe String -> String -> CF -> [(Cat,[Rule])] -> String
+mkCFile inPackage name cf groups = concat
    [
     header,
     nsStart inPackage ++ "\n",
@@ -157,7 +157,7 @@ mkCFile inPackage cf groups = concat
      [
       "/*** Generated Pretty Printer and Abstract Syntax Viewer ***/",
       "",
-      "`include \"Printer.svh\"",
+      "`include \"" ++ name ++ "/" ++ name ++ "Printer.svh\"",
       "`define INDENT_WIDTH 2",
       ""
      ]

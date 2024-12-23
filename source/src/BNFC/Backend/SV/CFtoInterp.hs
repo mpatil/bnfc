@@ -1,7 +1,7 @@
 
 module BNFC.Backend.SV.CFtoInterp (cf2Interp) where
 
-import Data.Char(toLower)
+import Data.Char(toLower, toUpper)
 
 import BNFC.CF
 import BNFC.Utils ((+++))
@@ -10,19 +10,19 @@ import BNFC.Backend.SV.Naming
 import BNFC.Backend.SV.Utils
 
 --Produces (.H file, .C file)
-cf2Interp :: Maybe String -> CF -> (String, String)
-cf2Interp inPackage cf = (mkHFile inPackage cab, mkCFile inPackage cab)
+cf2Interp :: Maybe String -> String -> CF -> (String, String)
+cf2Interp inPackage name cf = (mkHFile inPackage cab name, mkCFile inPackage cab name)
  where
     cab = cf2cabs cf
 
 -- **** Header (.H) File Functions ****
 
 --Generates the Header File
-mkHFile :: Maybe String -> CAbs -> String
-mkHFile inPackage cf = unlines [
-  "`ifndef " ++ hdef,
-  "`define " ++ hdef,
-  "`include \"Absyn.svh\"",
+mkHFile :: Maybe String -> CAbs -> String -> String
+mkHFile inPackage cf name = unlines [
+  "`ifndef " ++ (map toUpper name) ++ "_"  ++ hdef,
+  "`define " ++ (map toUpper name) ++ "_"  ++ hdef,
+  "`include \"" ++ name ++ "/" ++ name ++ "Absyn.svh\"",
   nsStart inPackage,
   "class Interp implements Visitor;",
   unlines ["  extern virtual task visit" ++ b ++ "(" ++ b ++ " p);" |
@@ -44,9 +44,9 @@ mkHFile inPackage cf = unlines [
 -- **** Implementation (.svh) File Functions ****
 
 --Makes the .svh File
-mkCFile :: Maybe String -> CAbs -> String
-mkCFile inPackage cf = unlines [
-  headerC,
+mkCFile :: Maybe String -> CAbs -> String -> String
+mkCFile inPackage cf name = unlines [
+  headerC name,
   nsStart inPackage,
   unlines [ "task Interp::visit" ++ t ++ "(" ++ t ++ " p); endtask //abstract class" | t <- absclasses cf],
   unlines [prCon   r  | (_,rs)  <- signatures cf, r <- rs],
@@ -55,15 +55,15 @@ mkCFile inPackage cf = unlines [
   nsEnd inPackage
  ]
 
-headerC :: String
-headerC = unlines [
+headerC :: String -> String
+headerC name = unlines [
       "/*******************************************************/",
       "/* This implements the common visitor design pattern.",
       "   Note that this method uses Visitor-traversal of lists, so",
       "   List->accept() does NOT traverse the list. This allows different",
       "   algorithms to use context information differently. */",
       "",
-      "`include \"Interp.svh\""
+      "`include \"" ++ name ++ "/" ++ name ++ "Interp.svh\""
       ]
 
 prBasic :: [Char] -> String

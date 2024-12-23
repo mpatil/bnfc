@@ -3,7 +3,7 @@
 module BNFC.Backend.SV.CFtoAbs (cf2SVAbs) where
 
 import Data.List
-import Data.Char(toLower, isUpper)
+import Data.Char(toLower, isUpper, toUpper)
 
 import BNFC.CF
 import BNFC.Options (RecordPositions(..))
@@ -17,18 +17,18 @@ import BNFC.Backend.SV.Utils
 --The result is two files (.h file, .sv file)
 
 cf2SVAbs :: RecordPositions -> Maybe String -> String -> CF -> (String, String)
-cf2SVAbs rp inPackage _ cf = (mkHFile rp inPackage cab cf, mkCFile inPackage cab cf)
+cf2SVAbs rp inPackage name cf = (mkHFile rp inPackage cab name cf, mkCFile inPackage cab name cf)
   where
     cab = cf2cabs cf
 
 -- **** Header (.H) File Functions **** --
 
 --Makes the Header file.
-mkHFile :: RecordPositions -> Maybe String -> CAbs -> CF -> String
-mkHFile rp inPackage cabs cf = unlines
+mkHFile :: RecordPositions -> Maybe String -> CAbs -> String -> CF -> String
+mkHFile rp inPackage cabs name cf = unlines
  [
-  "`ifndef " ++ hdef,
-  "`define " ++ hdef,
+  "`ifndef " ++ (map toUpper name) ++ "_" ++ hdef,
+  "`define " ++ (map toUpper name) ++ "_" ++ hdef,
   "",
   "typedef class Visitor;",
   "",
@@ -52,7 +52,7 @@ mkHFile rp inPackage cabs cf = unlines
   definedRules (Just $ LC nil cons) cf
   "/********************   Defined Constructors    ********************/",
   nsEnd inPackage,
-  "`endif"
+  "`endif // " ++ (map toUpper name) ++ "_" ++ hdef
  ]
  where
   classes = allClasses cabs
@@ -97,7 +97,6 @@ prCon (c,(f,cs)) = unlines [
   unlines
     ["  "++ typ +++ var ++ ";" | (typ,_,var) <- cs],
   "  extern function new" ++ "(" ++ conargs ++ ");",
-    -- Typ *p1, PIdent *p2, ListStm *p3);
   "  extern virtual task accept(Visitor v);",
   "endclass"
   ]
@@ -120,11 +119,11 @@ prList (c,b) = unlines [
 
 -- **** Implementation (.sv) File Functions **** --
 
-mkCFile :: Maybe String -> CAbs -> CF -> String
-mkCFile inPackage cabs _ = unlines $ [
-  "`ifndef ABSYN_SV",
-  "`define ABSYN_SV",
-  "`include \"Absyn.svh\"",
+mkCFile :: Maybe String -> CAbs -> String -> CF -> String
+mkCFile inPackage cabs name _ = unlines $ [
+  "`ifndef " ++ (map toUpper name) ++ "_ABSYN_SV",
+  "`define " ++ (map toUpper name) ++ "_ABSYN_SV",
+  "`include \"" ++ name ++ "/" ++ name ++ "Absyn.svh\"",
   nsStart inPackage,
   unlines [prConC  r | (_,rs) <- signatures cabs, r <- rs],
   unlines [prListC c | (c,_) <- listtypes cabs],
