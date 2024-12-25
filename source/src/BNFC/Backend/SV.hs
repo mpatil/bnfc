@@ -25,18 +25,18 @@ import BNFC.Backend.SV.Utils
 makeSV :: SharedOptions -> CF -> MkFiles ()
 makeSV opts cf = do
     let (hfile, cfile) = cf2SVAbs (linenumbers opts) (inPackage opts) name cf
-    mkfile (name ++ "/" ++ name ++ "Absyn.svh") commentWithEmacsModeHint hfile
-    mkfile (name ++ "/" ++ name ++ "Absyn.sv") commentWithEmacsModeHint cfile
+    mkfile (name ++ "/" ++ uname ++ "Absyn.svh") commentWithEmacsModeHint hfile
+    mkfile (name ++ "/" ++ uname ++ "Absyn.sv") commentWithEmacsModeHint cfile
     let (flex, env) = cf2lex (inPackage opts) name cf
     mkfile (name ++ ".l") commentWithEmacsModeHint flex
     let bison = cf2Yacc (linenumbers opts) (inPackage opts) name cf env
     mkfile (name ++ ".y") commentWithEmacsModeHint bison
     let (skelH, skelC) = cf2Interp (inPackage opts) name cf
-    mkfile (name ++ "/" ++ name ++ "Interp.svh") commentWithEmacsModeHint skelH
-    mkfile (name ++ "/" ++ name ++ "Interp.sv") commentWithEmacsModeHint skelC
+    mkfile (name ++ "/" ++ uname ++ "Interp.svh") commentWithEmacsModeHint skelH
+    mkfile (name ++ "/" ++ uname ++ "Interp.sv") commentWithEmacsModeHint skelC
     let (prinH, prinC) = cf2SVPrinter True (inPackage opts) name cf
-    mkfile (name ++ "/" ++ name ++ "Printer.svh") commentWithEmacsModeHint prinH
-    mkfile (name ++ "/" ++ name ++ "Printer.sv") commentWithEmacsModeHint prinC
+    mkfile (name ++ "/" ++ uname ++ "Printer.svh") commentWithEmacsModeHint prinH
+    mkfile (name ++ "/" ++ uname ++ "Printer.sv") commentWithEmacsModeHint prinC
     mkfile "Test.sv" commentWithEmacsModeHint (svtest cf name)
     Makefile.mkMakefile (optMake opts) $ makefile name prefix
     mkfile (name ++ "/" ++ name ++ "_pkg.sv") commentWithEmacsModeHint (svpkg name)
@@ -49,6 +49,7 @@ makeSV opts cf = do
     -- It should be a valid C identifier.
     prefix :: String
     prefix = snakeCase_ name ++ "_"
+    uname = map toUpper name
 
 -- | Put string into a block comment.
 comment :: String -> String
@@ -111,19 +112,21 @@ svpkg name =
     , ""
     , "package " ++ name ++ "_pkg;"
     , ""
-    , "`include \"" ++ name ++ "/" ++ name ++ "Absyn.svh\""
-    , "`include \"" ++ name ++ "/" ++ name ++ "Parser.svh\""
-    , "`include \"" ++ name ++ "/" ++ name ++ "Interp.svh\""
-    , "`include \"" ++ name ++ "/" ++ name ++ "Printer.svh\""
+    , "`include \"" ++ name ++ "/" ++ uname ++ "Absyn.svh\""
+    , "`include \"" ++ name ++ "/" ++ uname ++ "Parser.svh\""
+    , "`include \"" ++ name ++ "/" ++ uname ++ "Interp.svh\""
+    , "`include \"" ++ name ++ "/" ++ uname ++ "Printer.svh\""
     , ""
-    , "`include \"" ++ name ++ "/" ++ name ++ "Absyn.sv\""
-    , "`include \"" ++ name ++ "/" ++ name ++ "Interp.sv\""
-    , "`include \"" ++ name ++ "/" ++ name ++ "Printer.sv\""
+    , "`include \"" ++ name ++ "/" ++ uname ++ "Absyn.sv\""
+    , "`include \"" ++ name ++ "/" ++ uname ++ "Interp.sv\""
+    , "`include \"" ++ name ++ "/" ++ uname ++ "Printer.sv\""
     , ""
     , "endpackage"
     , ""
     , "`endif"
    ]
+  where
+    uname = map toUpper name
 
 fusesoc name =
   unlines
@@ -133,15 +136,15 @@ fusesoc name =
     ,  "  pkg:"
     ,  "    files:"
     ,  ""
-    ,  "      - " ++ name ++ "Absyn.svh: {is_include_file: true}"
-    ,  "      - " ++ name ++ "Interp.svh: {is_include_file: true}"
-    ,  "      - " ++ name ++ "Lexer.svh: {is_include_file: true}"
-    ,  "      - " ++ name ++ "Printer.svh: {is_include_file: true}"
+    ,  "      - " ++ uname ++ "Absyn.svh: {is_include_file: true}"
+    ,  "      - " ++ uname ++ "Interp.svh: {is_include_file: true}"
+    ,  "      - " ++ uname ++ "Lexer.svh: {is_include_file: true}"
+    ,  "      - " ++ uname ++ "Printer.svh: {is_include_file: true}"
     ,  "      - bio.svh: {is_include_file: true}"
-    ,  "      - " ++ name ++ "Parser.svh: {is_include_file: true}"
-    ,  "      - " ++ name ++ "Absyn.sv: {is_include_file: true}"
-    ,  "      - " ++ name ++ "Interp.sv: {is_include_file: true}"
-    ,  "      - " ++ name ++ "Printer.sv: {is_include_file: true}"
+    ,  "      - " ++ uname ++ "Parser.svh: {is_include_file: true}"
+    ,  "      - " ++ uname ++ "Absyn.sv: {is_include_file: true}"
+    ,  "      - " ++ uname ++ "Interp.sv: {is_include_file: true}"
+    ,  "      - " ++ uname ++ "Printer.sv: {is_include_file: true}"
     ,  ""
     ,  "      - " ++ name ++ "_pkg.sv"
     ,  "    file_type: systemVerilogSource"
@@ -186,3 +189,5 @@ fusesoc name =
     ,  "    paramtype: plusarg"
     ,  ""
    ]
+  where
+    uname = map toUpper name

@@ -48,7 +48,7 @@ mkHFile inPackage name cf groups = unlines
     "`ifndef " ++ (map toUpper name) ++ "_" ++ hdef,
     "`define " ++ (map toUpper name) ++ "_" ++ hdef,
     "",
-    "`include \"" ++ name ++ "/" ++ name ++ "Absyn.svh\"",
+    "`include \"" ++ name ++ "/" ++ (map toUpper name) ++ "Absyn.svh\"",
     nsStart inPackage,
     "/* Certain applications may improve performance by changing the buffer size */",
     "`define " ++ nsDefine inPackage "BUFFER_INITIAL" ++ " 2000",
@@ -157,7 +157,7 @@ mkCFile inPackage name cf groups = concat
      [
       "/*** Generated Pretty Printer and Abstract Syntax Viewer ***/",
       "",
-      "`include \"" ++ name ++ "/" ++ name ++ "Printer.svh\"",
+      "`include \"" ++ name ++ "/" ++ (map toUpper name) ++ "Printer.svh\"",
       "`define INDENT_WIDTH 2",
       ""
      ]

@@ -14,7 +14,7 @@ module BNFC.Backend.SV.CFtoYacc
 
 import Prelude hiding ((<>))
 
-import Data.Char       ( toLower, isUpper)
+import Data.Char       ( toLower, isUpper, toUpper)
 import Data.Foldable   ( toList )
 import Data.List       (nub, intercalate)
 import qualified Data.Map as Map
@@ -76,12 +76,12 @@ header :: Maybe String -> String -> CF -> String
 header inPackage name cf = unlines
     [ "/*************************************************/"
     , "%{"
-    , "`include \"" ++ name ++ "/" ++ name ++ "Absyn.svh\""
+    , "`include \"" ++ name ++ "/" ++ (map toUpper name) ++ "Absyn.svh\""
     , "`include \"bio.svh\""
     , ""
     , "class Parser;"
     , "  Biobuf b;"
-    , "`include \"" ++ name ++ "/" ++ name ++ "Lexer.svh\""
+    , "`include \"" ++ name ++ "/" ++ (map toUpper name) ++ "Lexer.svh\""
     , ""
     , "typedef struct { int i; } YY_BUFFER_STATE;"
     , ""

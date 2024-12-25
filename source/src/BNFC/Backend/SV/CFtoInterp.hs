@@ -22,7 +22,7 @@ mkHFile :: Maybe String -> CAbs -> String -> String
 mkHFile inPackage cf name = unlines [
   "`ifndef " ++ (map toUpper name) ++ "_"  ++ hdef,
   "`define " ++ (map toUpper name) ++ "_"  ++ hdef,
-  "`include \"" ++ name ++ "/" ++ name ++ "Absyn.svh\"",
+  "`include \"" ++ name ++ "/" ++ (map toUpper name) ++ "Absyn.svh\"",
   nsStart inPackage,
   "class Interp implements Visitor;",
   unlines ["  extern virtual task visit" ++ b ++ "(" ++ b ++ " p);" |
@@ -63,7 +63,7 @@ headerC name = unlines [
       "   List->accept() does NOT traverse the list. This allows different",
       "   algorithms to use context information differently. */",
       "",
-      "`include \"" ++ name ++ "/" ++ name ++ "Interp.svh\""
+      "`include \"" ++ name ++ "/" ++ (map toUpper name) ++ "Interp.svh\""
       ]
 
 prBasic :: [Char] -> String

@@ -123,7 +123,7 @@ mkCFile :: Maybe String -> CAbs -> String -> CF -> String
 mkCFile inPackage cabs name _ = unlines $ [
   "`ifndef " ++ (map toUpper name) ++ "_ABSYN_SV",
   "`define " ++ (map toUpper name) ++ "_ABSYN_SV",
-  "`include \"" ++ name ++ "/" ++ name ++ "Absyn.svh\"",
+  "`include \"" ++ name ++ "/" ++ (map toUpper name) ++ "Absyn.svh\"",
   nsStart inPackage,
   unlines [prConC  r | (_,rs) <- signatures cabs, r <- rs],
   unlines [prListC c | (c,_) <- listtypes cabs],
