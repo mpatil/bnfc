@@ -178,7 +178,7 @@ fusesoc name =
     ,  ""
     ,  "  test:"
     ,  "    <<: *sim"
-    ,  "    toplevel: tb_top"
+    ,  "    toplevel: test"
     ,  "    default_tool: vcs"
     ,  "    parameters:"
     ,  "      - input=test.w"

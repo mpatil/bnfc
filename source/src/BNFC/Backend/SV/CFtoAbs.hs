@@ -30,7 +30,7 @@ mkHFile rp inPackage cabs name cf = unlines
   "`ifndef " ++ (map toUpper name) ++ "_" ++ hdef,
   "`define " ++ (map toUpper name) ++ "_" ++ hdef,
   "",
-  "typedef class Visitor;",
+  "typedef interface class Visitor;",
   "",
   "//************************************************************.",
   nsStart inPackage,
@@ -242,4 +242,3 @@ definedRules mlc cf banner
             (_, LitString s)   -> show s
 
           call x es = x ++ "(" ++ intercalate ", " (map loop (zip [0..] es)) ++ ")"
-

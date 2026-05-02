@@ -76,7 +76,9 @@ header :: Maybe String -> String -> CF -> String
 header inPackage name cf = unlines
     [ "/*************************************************/"
     , "%{"
+    , "`ifndef " ++ absynHeaderGuard
     , "`include \"" ++ name ++ "/" ++ (map toUpper name) ++ "Absyn.svh\""
+    , "`endif"
     , "`include \"bio.svh\""
     , ""
     , "class Parser;"
@@ -96,6 +98,7 @@ header inPackage name cf = unlines
     ]
   where
     ns   = nsString inPackage
+    absynHeaderGuard = map toUpper name ++ "_ABSYN_HEADER"
     eps  = toList (allEntryPoints cf) ++ map TokenCat (positionCats cf)
     dats = nub $ map normCat eps
 
