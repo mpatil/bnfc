@@ -118,6 +118,11 @@ header mode cf = unlines $ concat
     -- Fixing regression introduced in 2.9.2.
   , when (stlParser mode)
     [ "#include <algorithm> /* for std::reverse */"  -- mandatory e.g. with GNU C++ 11
+    , "#include \"" ++ ("ParserError" <.> h) ++ "\""  -- for throwing parser_error in C++
+
+    -- Commelina, 2026-03-05, issue #534: @std::to_string@ is invalid with @--ansi@
+    -- TODO: Choose to use @std::to_string@ or not according to the @--ansi@ flag
+    , "#include <sstream>"
     ]
   , [ "#include <stdio.h>"
     , "#include <stdlib.h>"
@@ -137,7 +142,7 @@ header mode cf = unlines $ concat
     , "extern YY_BUFFER_STATE " ++ name ++ "_scan_string(const char *str, yyscan_t scanner);"
     , "extern void " ++ name ++ "_delete_buffer(YY_BUFFER_STATE buf, yyscan_t scanner);"
     , ""
-    , "extern void " ++ name ++ "lex_destroy(yyscan_t scanner);"
+    , "extern int " ++ name ++ "lex_destroy(yyscan_t scanner);"
     , "extern char* " ++ name ++ "get_text(yyscan_t scanner);"
     , ""
     , "extern yyscan_t " ++ name ++ "_initialize_lexer(FILE * inp);"
@@ -160,23 +165,48 @@ header mode cf = unlines $ concat
 unionDependentCode :: ParserMode -> String
 unionDependentCode mode = unlines
   [ "%{"
-  , errorHandler name
+  , errorHandler mode
   , "int yyparse(yyscan_t scanner, YYSTYPE *result);"
   , ""
   , "extern int yylex(YYSTYPE *lvalp, YYLTYPE *llocp, yyscan_t scanner);"
   , "%}"
   ]
-  where
-  name = parserName mode
 
-errorHandler :: String -> String
-errorHandler name = unlines
-  [ "void yyerror(YYLTYPE *loc, yyscan_t scanner, YYSTYPE *result, const char *msg)"
-  , "{"
-  , "  fprintf(stderr, \"error: %d,%d: %s at %s\\n\","
-  , "    loc->first_line, loc->first_column, msg, " ++ name ++ "get_text(scanner));"
-  , "}"
-  ]
+errorHandler :: ParserMode -> String
+errorHandler mode = case mode of
+  CParser _ _ ->
+    -- This generates error handler for C with fprintf
+    unlines
+      [ "void yyerror(YYLTYPE *loc, yyscan_t scanner, YYSTYPE *result, const char *msg)"
+      , "{"
+      , "  fprintf(stderr, \"error: %d,%d: %s at %s\\n\","
+      , "    loc->first_line, loc->first_column, msg, " ++ name ++ "get_text(scanner));"
+      , "}"
+      ]
+  CppParser ns _ ->
+    --  This generates error handler for C++ with throw parse_error
+    unlines
+      [ "void yyerror(YYLTYPE *loc, yyscan_t scanner, YYSTYPE *result, const char *msg)"
+      , "{"
+      , "  std::string error_msg = msg;"
+      , "  if (loc) {"
+
+      -- Commelina, 2026-03-05, issue #534: @std::to_string@ is invalid with @--ansi@
+      -- TODO: Choose to use @std::to_string@ or not according to the @--ansi@ flag
+      , "    std::ostringstream oss;"
+      , "    oss << \" at line \" << loc->first_line"
+      , "        << \", column \" << loc->first_column;"
+      , "    error_msg += oss.str();"
+      , "  }"
+
+      , "  if (scanner) {"
+      , "    error_msg += \": '\" + std::string(" ++ name ++ "get_text(scanner)) + \"'\";"
+      , "  }"
+      , "  throw " ++ maybe "" (++ "::") ns ++ "parse_error(loc ? loc->first_line : -1, error_msg);"
+      , "}"
+      ]
+  where
+    name = parserName mode
 
 -- | Parser entry point code.
 --
@@ -194,7 +224,10 @@ parseMethod mode cf cat = unlines $ concat
   , body False
   , [ ""
     , unwords [ "/* Entrypoint: parse", dat, "from string. */" ]
-    , dat ++ " ps" ++ parser ++ "(const char *str)"
+    , dat ++ " p" ++ (if cParser mode then "s" else "") ++ parser ++ "(const char *str)"
+        -- Andreas, 2026-01-26, issue #524
+        -- In C++, functions can be overloaded, but not in C.
+        -- So we need to give a different name to the string parser than to the file parser.
     ]
   , body True
   ]

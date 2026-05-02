@@ -41,17 +41,30 @@ exampleGrammars :: [Example]
 exampleGrammars = map (fmap prefix) $
   [ fmap ("Alfa"      </>) $ Example' needsLayout "Alfa.cf"      [ "Sorting.alfa" ]
   , fmap ("cubicaltt" </>) $ Example' needsLayout "cubicaltt.cf" [ "prelude.ctt" ]
+
+    -- FIXME: Actually, it does not compare the abstract syntax...
+    -- FIXME: Looks weird to put it at example/...
+    -- Test --positions=range option of haskell backend
+  , fmap ("range" </>) $ Example' (Included ["range"]) "range.cf" [ "good01.in", "good02.in" ]
+
+  -- Note: The C backend does not support the `define` pragma. See
+  --       https://github.com/BNFC/bnfc/issues/266.
+  , fmap ("define"    </>) $ Example' noDefine    "test.cf"      [ "good01.in"   ]
+
+  -- Note: The tree-sitter backend does not check ambigious grammar,
+  --       which brings an error when generating parsers via @tree-sitter build@.
+  , fmap ("GF"        </>) $ Example' noTreeSitter "gf.cf" [ "example.gf"  ]
+  , fmap ("C"         </>) $ Example' noTreeSitter "C.cf"  [ "runtime.c", "koe2.c", "core.c" ]
+  , fmap ("C"         </>) $ Example' noTreeSitter "C4.cf" [ "koe2.c" ]
+  , fmap ("Java"      </>) $ Example' (Excluded ["antlr", "tree-sitter"]) "java.cf"   []
+      -- ANTLR cannot handle mutual left recursion in java.cf
+
   , fmap ("cpp"       </>) $ Example "cpp.cf"    [ "example.cpp" ]
-  , fmap ("define"    </>) $ Example "test.cf"   [ "good01.in"   ]
-  , fmap ("GF"        </>) $ Example "gf.cf"     [ "example.gf"  ]
   , fmap ("OCL"       </>) $ Example "OCL.cf"    [ "example.ocl" ]
   , fmap ("prolog"    </>) $ Example "Prolog.cf" [ "small.pl", "simpsons.pl" ]
-  , fmap ("C"         </>) $ Example "C.cf"      [ "runtime.c", "koe2.c", "core.c" ]
-  , fmap ("C"         </>) $ Example "C4.cf"     [ "koe2.c" ]
   , fmap ("Javalette" </>) $ Example "JavaletteLight.cf"    [ "koe.jll" ]
   , fmap ("LBNF"      </>) $ Example "LBNF.cf"   [ "LBNF.cf" ]
-  , fmap ("Java"      </>) $ Example' (Excluded ["antlr"]) "java.cf"   []
-      -- ANTLR cannot handle mutual left recursion in java.cf
+
   , Example "Calc.cf" []
   , Example "fstStudio.cf" []
   ]
@@ -60,8 +73,10 @@ exampleGrammars = map (fmap prefix) $
   -- Regular expressions to include certain parameterized tests:
   needsLayout = Included ["Agda", "Haskell"]
   -- Regular expressions to exclude certain parameterized tests:
+  noDefine  = Excluded ["^C$", "^C.*numbers.*$"]
   -- noJava = "^Java"    -- begins with "Java"
   -- noCPP  = "^C\\+\\+" -- begins with "C++"
+  noTreeSitter = Excluded ["tree-sitter"]
 
 layoutExamples :: [Example]
 layoutExamples = take 2 exampleGrammars

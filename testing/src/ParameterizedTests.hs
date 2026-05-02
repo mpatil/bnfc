@@ -38,24 +38,55 @@ import Shelly
 #endif
   , when, withTmpDir, writefile
   -- , print_stdout, print_stderr
+  , setenv
   )
 
 import TestUtils
 import TestData
 import OutputParser
 
--- ~~~ TESTS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-all :: Test
-all = makeTestSuite "Parameterized tests" [allWithParams p | p <- parameters ]
+-- Note (Commelina, 2026-03-24):
+-- 1. Naming convention:
+--    * functions which receive a @TestParameters@ are named @xxxWith@
+--    * runnable HTF @Test@s or @[Test]@s are named @xxxTest@ or @xxxTests@
+-- 2. 'current' and @currentXXXTest@s are NOT used now: they are present
+--    mostly for historical reasons.
 
-allWithParams :: TestParameters -> Test
-allWithParams params = makeTestSuite (tpName params) $ concat $
-  [ distcleanTest  params ] :
-  testCases params :
-  [ exitCodeTest   params ] :
-  [ entrypointTest params ] :
-  [ exampleTests   params ] :
-  []
+----------------------------------------------------------------------
+-- Exposed tests
+----------------------------------------------------------------------
+all :: Test
+all = makeTestSuite "Parameterized tests" $ concat
+  [ map distcleanTestWith  parameters
+  , regressionTests
+  , map exitCodeTestWith   parameters
+  , map entrypointTestWith parameters
+  , map exampleTestsWith   parameters
+  ]
+
+-- | Layout currently only works for Haskell (even Agda) and Haskell/GADT.
+layoutTest :: Test
+layoutTest = makeTestSuite "Layout parsing test" $ concat
+  [ map (`makeTestCase` ("regression-tests" </> "399_TopLayoutStop")) $
+    [ haskellStartPosParameters
+    ]
+  , map (`makeTestCase` ("regression-tests" </> "356_LayoutSnocList")) $
+    [ haskellParameters
+    ]
+  , map (`makeTestCase` ("regression-tests" </> "194_layout")) $
+    [ haskellGADTParameters
+    , haskellAgdaParameters
+    ]
+  , map (`makeTestCase` ("regression-tests" </> "352_TopLayoutOnly")) $
+    [ haskellParameters
+    ]
+  , let p = haskellStartPosParameters
+    in  [ makeTestSuite (tpName p) $ mapMaybe (exampleTestWith p) layoutExamples ]
+  ]
+
+----------------------------------------------------------------------
+-- Legacy code, NOT used now
+----------------------------------------------------------------------
 
 -- | This parameterized test is called first.
 --   Use it while working in connection with a certain test case. (For quicker response.)
@@ -66,7 +97,7 @@ current = currentRegressionTest
 
 currentExampleTest :: Test
 currentExampleTest = makeTestSuite "Current parameterized test" $
-  mapMaybe (`exampleTest` (exampleGrammars !! 3)) parameters
+  mapMaybe (`exampleTestWith` (exampleGrammars !! 3)) parameters
 
 currentRegressionTest :: Test
 currentRegressionTest = makeTestSuite "Current parameterized test" $
@@ -88,26 +119,6 @@ currentRegressionTest = makeTestSuite "Current parameterized test" $
   -- cur = "194_layout"
   -- cur = "210_NumberedCatWithoutCoerce"
 
--- | Layout currently only works for Haskell (even Agda) and Haskell/GADT.
-layoutTest :: Test
-layoutTest = makeTestSuite "Layout parsing test" $ concat
-  [ map (`makeTestCase` ("regression-tests" </> "399_TopLayoutStop")) $
-    [ haskellFunctorParameters
-    ]
-  , map (`makeTestCase` ("regression-tests" </> "356_LayoutSnocList")) $
-    [ haskellParameters
-    ]
-  , map (`makeTestCase` ("regression-tests" </> "194_layout")) $
-    [ haskellGADTParameters
-    , haskellAgdaParameters
-    ]
-  , map (`makeTestCase` ("regression-tests" </> "352_TopLayoutOnly")) $
-    [ haskellParameters
-    ]
-  , let p = haskellFunctorParameters
-    in  [ makeTestSuite (tpName p) $ mapMaybe (exampleTest p) layoutExamples ]
-  ]
-
 -- #254 is now covered by fail-lbnf/254-empty-input
 -- -- | BNFC should not proceed if grammar does not define any rules.
 -- noRulesTest :: TestParameters -> Test
@@ -121,10 +132,27 @@ layoutTest = makeTestSuite "Layout parsing test" $ concat
 --       unless (Text.isInfixOf "ERROR" err) $
 --         assertFailure "Expected BNFC to die with ERROR message."
 
+----------------------------------------------------------------------
+-- Concrete tests (or test generators) used by exposed tests
+----------------------------------------------------------------------
+
+-- | To test that @distclean@ removes all generated files.
+distcleanTestWith :: TestParameters -> Test
+distcleanTestWith params =
+  makeShellyTest "distclean removes all generated files" $ withTmpDir $ \tmp -> do
+    cd tmp
+    let cfFile = "G.cf"
+    writefile cfFile "L. C ::= \"t\" ;"
+    tpBnfc params cfFile
+    tpBuild params
+    tpDistclean
+    dContents <- ls "."
+    assertEqual [cfFile] (map takeFileName dContents)
+
 -- | This tests checks that when given an invalid input, the generated example
 -- application exits with a non-zero exit code.
-exitCodeTest :: TestParameters -> Test
-exitCodeTest params =
+exitCodeTestWith :: TestParameters -> Test
+exitCodeTestWith params =
     makeShellyTest "Test program exits with code 1 on failure" $
         withTmpDir $ \tmp -> do
             cd tmp
@@ -140,8 +168,8 @@ exitCodeTest params =
 
 -- | This tests that the generated parser abide to the entrypoint directive
 -- (see issue #127)
-entrypointTest :: TestParameters -> Test
-entrypointTest params =
+entrypointTestWith :: TestParameters -> Test
+entrypointTestWith params =
     makeShellyTest "Respects entrypoint directive" $ withTmpDir $ \tmp -> do
         cd tmp
         writefile "foobar.cf" "entrypoints Foo;"
@@ -160,19 +188,76 @@ entrypointTest params =
 -- | Runs BNFC on the example grammars, build the generated code and, if
 -- example in the grammar's language are available, tries to parse the
 -- examples with the generated test program.
-exampleTests :: TestParameters -> Test
-exampleTests params =
-    makeTestSuite "Examples" $ mapMaybe (exampleTest params) exampleGrammars
+exampleTestsWith :: TestParameters -> Test
+exampleTestsWith params =
+    makeTestSuite "Examples" $ mapMaybe (exampleTestWith params) exampleGrammars
   --     filter (not . excluded) exampleGrammars
   -- where
   --   excluded :: Example -> Bool
   --   excluded (Example' exclude _ _) = any (tpName params =~) exclude
 
+-- | To test certain grammatical constructions or interactions between rules,
+-- test grammar can be created under the regression-tests directory,
+-- together with valid and invalid inputs.
+regressionTests :: [Test]
+regressionTests = concat
+  [ -- Note: Disabled on 2026-03-04 (Java). The Java backend does not support
+    --       labels with only different cases. See
+    --       https://github.com/BNFC/bnfc/issues/479.
+    --
+    withParams "479_LabelsCaseSensitive"      (parameters `excludeParameterWithRegex` "Java")
+
+    -- Note: Disabled on 2026-03-04 (C). It fails on the c backend.
+    --       See https://github.com/BNFC/bnfc/issues/266.
+    --
+  , withParams "266_define"                   (parameters `excludeParameter`          cParameters
+                                                          `excludeParameterWithRegex` "C \\(with line numbers\\)"
+                                              )
+
+  , withParams "358_MixFixLists"              parameters
+  , withParams "235_SymbolsOverlapTokens"     parameters
+  , withParams "278_Keywords"                 parameters
+  , withParams "256_Regex"                    parameters
+  , withParams "222_IntegerList"              parameters
+  , withParams "70_WhiteSpaceSeparator"       parameters
+
+    -- Note: Disabled on 2026-03-04 (ocaml). It fails on ocaml and ocaml-menhir
+    --       backends, see https://github.com/ocaml/ocaml/issues/9964.
+    --
+  , withParams "202_comments"                 (parameters `excludeParameterWithRegex` "OCaml")
+
+  , withParams "210_NumberedCatWithoutCoerce" parameters
+  , withParams "204_InternalToken"            parameters
+  , withParams "249_unicode"                  parameters
+
+    -- Note: Disabled on 2026-03-04 (ocaml and haskell-gadt). It:
+    --   * fails on ocaml and ocaml-menhir backends, see
+    --     https://github.com/ocaml/ocaml/issues/9964.
+    --   * fails on the haskell-gadt backend, see
+    --     https://github.com/BNFC/bnfc/issues/280#issuecomment-830844433.
+    --
+  , withParams "289_LexerKeywords"            (parameters `excludeParameter`          haskellGADTParameters
+                                                          `excludeParameterWithRegex` "OCaml"
+                                              )
+
+  , withParams "100_coercion_lists"           parameters
+  , withParams "comments"                     parameters
+  , withParams "149"                          parameters
+  ]
+
+  where
+    withParams dir params =
+      map (`makeTestCase` ("regression-tests" </> dir)) params
+
+----------------------------------------------------------------------
+-- Helpers for building tests
+----------------------------------------------------------------------
+
 -- | Construct a test from an example grammar and test inputs,
 --   unless the test parameters are contained in the exclusion list
 --   or not contained in the inclusion list.
-exampleTest :: TestParameters -> Example -> Maybe Test
-exampleTest params (Example' limit grammar examples)
+exampleTestWith :: TestParameters -> Example -> Maybe Test
+exampleTestWith params (Example' limit grammar examples)
   | Excluded exclude <- limit,       any (tpName params =~) exclude = Nothing
   | Included include <- limit, not $ any (tpName params =~) include = Nothing
   | otherwise = Just $
@@ -186,34 +271,15 @@ exampleTest params (Example' limit grammar examples)
             forM_ examples $ \example ->
                 tpRunTestProg params lang [takeFileName example]
 
--- | To test certain grammatical constructions or interactions between rules,
--- test grammar can be created under the regression-tests directory,
--- together with valid and invalid inputs.
-testCases :: TestParameters -> [Test]
-testCases params =
-    map (makeTestCase params) $
-      map ("regression-tests/" ++) $
-        [ "479_LabelsCaseSensitive"
-        , "266_define"
-        , "358_MixFixLists"
-        , "235_SymbolsOverlapTokens"
-        , "278_Keywords"
-        , "256_Regex"
-        , "222_IntegerList"
-        , "70_WhiteSpaceSeparator"
-        , "202_comments"
-        , "210_NumberedCatWithoutCoerce"
-        , "204_InternalToken"
-        , "249_unicode"
-        , "289_LexerKeywords"
-        , "100_coercion_lists"
-        , "comments"
-        , "149"
-        ]
-
 makeTestCase :: TestParameters -> FilePath -> Test
 makeTestCase params dir =
         makeShellyTest (mkTitle dir) $ withTmpDir $ \tmp -> do
+            -- Note (Commelina, 2026-03-25):
+            --   tree-sitter uses a global library cache by default,
+            --   which can cause errors when working with grammars with
+            --   the same name in parallel.
+            setenv "TREE_SITTER_LIBDIR" (Text.pack tmp <> "_lib")
+
             dir <- absPath dir
             dirContents <- ls dir  -- Note: these are absolute filenames!
             cd tmp
@@ -232,7 +298,8 @@ makeTestCase params dir =
                     gold <- readfile (replaceExtension f "out")
                     let (_, goldLT) = parseOutput gold
                         (_, actualLT) = parseOutput output
-                    assertEqual goldLT actualLT
+                    when (tpShouldGoldenCheckLin params) $
+                      assertEqual goldLT actualLT
             let bad = filter (matchFilePath "bad[0-9]*[.]in$") dirContents
             forM_ bad $ \f -> do
                 errExit False $ tpRunTestProg params testFile [f]
@@ -240,20 +307,10 @@ makeTestCase params dir =
   where
     mkTitle dir = tpName params ++ ":" ++ takeFileName dir
 
--- | To test that @distclean@ removes all generated files.
-distcleanTest :: TestParameters -> Test
-distcleanTest params =
-  makeShellyTest "distclean removes all generated files" $ withTmpDir $ \tmp -> do
-    cd tmp
-    let cfFile = "G.cf"
-    writefile cfFile "L. C ::= \"t\" ;"
-    tpBnfc params cfFile
-    tpBuild params
-    tpDistclean
-    dContents <- ls "."
-    assertEqual [cfFile] (map takeFileName dContents)
+----------------------------------------------------------------------
+-- Parameters
+----------------------------------------------------------------------
 
--- ~~~ Parameters ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- Test parameters are the combination of bnfc options (that define the
 -- backend to use) a build command to compile the resulting parser and a run
 -- command to run the test program.
@@ -266,7 +323,24 @@ data TestParameters = TP
     tpBuild       :: Sh ()
   , -- | Command for running the test executable with the given arguments
     tpRunTestProg :: FilePath -> [FilePath] -> Sh Text
+  , -- | Whether to compare the @[Linearized tree]@ part
+    tpShouldGoldenCheckLin :: Bool
   }
+
+-- FIXME: Similar implementation is present at 'TestData' ('Excluded'
+--        and 'Included').
+--        Unify them with a single solution.
+
+-- | Exclude certain @TestParameters@ from a list by @tpName@.
+excludeParameter :: [TestParameters] -> TestParameters -> [TestParameters]
+excludeParameter params param =
+  filter ((/= tpName param) . tpName) params
+
+-- | Exclude zero or many @TestParameters@ whose @tpName@ matches the
+-- given regexp from a list.
+excludeParameterWithRegex :: [TestParameters] -> String -> [TestParameters]
+excludeParameterWithRegex params regex =
+  filter (not . (=~ regex) . tpName) params
 
 baseParameters :: TestParameters
 baseParameters =  TP
@@ -276,6 +350,7 @@ baseParameters =  TP
   , tpRunTestProg = \ lang args -> do
       bin <- baseTestProg lang
       cmd bin args
+  , tpShouldGoldenCheckLin = True
   }
 
 -- | Get the test binary.
@@ -288,29 +363,25 @@ haskellParameters = TP
   , tpBnfcOptions = ["--haskell"]
 
   , tpBuild = do
-      cmd "hlint"
-        "-i" "Avoid lambda"
-        "-i" "Avoid lambda using `infix`"
-        "-i" "Eta reduce"
-        "-i" "Redundant bracket"
-        "-i" "Redundant lambda"
-        "-i" "Redundant $"
-        "-i" "Use camelCase"
-        "-i" "Use newtype instead of data"
-        "-i" "Use fmap"
-        -- "-i" "Unused LANGUAGE pragma"
-        "."
+      hlintCheck
       -- cmd "ghc" "-XNoImplicitPrelude" "-Wall" "-Werror" . (:[]) =<< findFileRegex "Abs.*\\.hs$"
       haskellBuild
       -- cmd "ghc" "-XNoImplicitPrelude" "-Wall" "-Werror" . (:[]) =<< findFileRegex "Skel.*\\.hs$"
 
   , tpRunTestProg = haskellRunTestProg
+  , tpShouldGoldenCheckLin = True
   }
 
-haskellFunctorParameters :: TestParameters
-haskellFunctorParameters = haskellParameters
-  { tpName        = "Haskell (with functor)"
-  , tpBnfcOptions = ["--haskell", "--functor"]
+haskellStartPosParameters :: TestParameters
+haskellStartPosParameters = haskellParameters
+  { tpName        = "Haskell (with --positions=start)"
+  , tpBnfcOptions = ["--haskell", "--positions=start"]
+  }
+
+haskellRangePosParameters :: TestParameters
+haskellRangePosParameters = haskellParameters
+  { tpName        = "Haskell (with --positions=range)"
+  , tpBnfcOptions = ["--haskell", "--positions=range"]
   }
 
 haskellGADTParameters :: TestParameters
@@ -319,45 +390,95 @@ haskellGADTParameters = TP
   , tpBnfcOptions = ["--haskell-gadt"]
   , tpBuild       = haskellBuild
   , tpRunTestProg = haskellRunTestProg
+  , tpShouldGoldenCheckLin = True
   }
 
 haskellAgdaParameters :: TestParameters
-haskellAgdaParameters = haskellGADTParameters  -- TODO: use haskellParameters
+haskellAgdaParameters = haskellParameters
   { tpName = "Haskell & Agda"
-  , tpBnfcOptions = ["--haskell", "--agda", "--functor"]
+  , tpBnfcOptions = ["--haskell", "--agda"]
+  , tpBuild       = hlintCheck >> agdaBuild
   }
 
-haskellAgdaFunctorParameters :: TestParameters
-haskellAgdaFunctorParameters = haskellGADTParameters  -- TODO: use haskellParameters
-  { tpName = "Haskell & Agda (with --functor)"
-  , tpBnfcOptions = ["--haskell", "--agda", "--functor"]
+haskellAgdaStartPosParameters :: TestParameters
+haskellAgdaStartPosParameters = haskellAgdaParameters
+  { tpName = "Haskell & Agda (with --positions=start)"
+  , tpBnfcOptions = ["--haskell", "--agda", "--positions=start"]
   }
 
--- | Invoke the Makefile with GHC-specific options.
-haskellBuild :: Sh ()
-haskellBuild = tpMake [ "GHC_OPTS=-XNoImplicitPrelude -Wall -Werror" ]
+haskellAgdaRangePosParameters :: TestParameters
+haskellAgdaRangePosParameters = haskellAgdaParameters
+  { tpName = "Haskell & Agda (with --positions=range)"
+  , tpBnfcOptions = ["--haskell", "--agda", "--positions=range"]
+  }
 
--- | Haskell backend: default command for running the test executable with the given arguments.
-haskellRunTestProg :: FilePath -> [FilePath] -> Sh Text
-haskellRunTestProg _lang args = do
-      -- cmd "echo" "Looking for Test* binary"
-      -- -- can't print anything here because then the setStdin input is used up here
-      bin <- findFileRegex "Test[^.]*$"
-      -- cmd "echo" "Running" bin  -- ditto
-      -- print_stdout True $ print_stderr True $ do
+cParameters :: TestParameters
+cParameters = TP
+  { tpName = "C"
+  , tpBnfcOptions = ["--c"]
+  , tpBuild = do
+      -- Note: Newer C toolchains warn implicit conversions from
+      -- ints to pointers (-Wint-conversion) and implicit function
+      -- declarations (-Wimplicit-function-declaration).
+      -- Re-enable -Werror after fixing these warnings.
+      --
+      -- let flags = "CC_OPTS=-Wstrict-prototypes -Wno-sign-compare -Werror"
+      let flags = "CC_OPTS=-Wstrict-prototypes -Wno-sign-compare"
+
+      tpMake [flags]
+      tpMake [flags, "Skeleton.o"]
+  , tpRunTestProg = \ lang args -> do
+      bin <- baseTestProg lang
       cmd bin args
+      -- Facility to check for memory leaks
+      -- cmd "valgrind" $
+      --     "--leak-check=full"  :
+      --     "--error-exitcode=1" :
+      --     "--errors-for-leak-kinds=definite" :
+      --     "--show-leak-kinds=definite" :
+      --     bin :
+      --     args
+  , tpShouldGoldenCheckLin = True
+  }
+
+ocamlParameters :: TestParameters
+ocamlParameters =  TP
+  { tpName        = "OCaml"
+  , tpBuild       = tpMake ["OCAMLCFLAGS=-safe-string"]
+  , tpBnfcOptions = ["--ocaml"]
+  , tpRunTestProg = haskellRunTestProg
+  , tpShouldGoldenCheckLin = True
+  }
+
+ocamlMenhirParameters :: TestParameters
+ocamlMenhirParameters = ocamlParameters
+  { tpName = "OCaml/Menhir"
+  , tpBnfcOptions = ["--ocaml", "--menhir"]
+  }
+
+treeSitterParameters :: TestParameters
+treeSitterParameters = TP
+  { tpName        = "tree-sitter"
+  , tpBuild       = tpMake
+  , tpBnfcOptions = ["--tree-sitter"]
+  , tpRunTestProg = \ _lang args -> do
+      cmd "tree-sitter" "parse" args
+  -- Note: tree-sitter does not have a builtin pretty-printer,
+  --       so we disable checks for linearized output here.
+  , tpShouldGoldenCheckLin = False
+  }
 
 parameters :: [TestParameters]
 parameters = concat
   [ []
     -- OCaml/Menhir
-  , [ ocaml { tpName = "OCaml/Menhir"
-            , tpBnfcOptions = ["--ocaml", "--menhir"] }
-    ]
+  , [ ocamlMenhirParameters ]
     -- OCaml
-  , [ ocaml ]
+  , [ ocamlParameters ]
     -- Functor (Haskell & Agda)
-  , [ haskellAgdaFunctorParameters]
+  , [ haskellAgdaStartPosParameters
+    , haskellAgdaRangePosParameters
+    ]
     -- C++ (extras)
   , [ cBase { tpName = "C++ (with line numbers)"
             , tpBnfcOptions = ["--cpp", "-l"] }
@@ -365,25 +486,7 @@ parameters = concat
             , tpBnfcOptions = ["--cpp", "-p foobar"] }
     ]
     -- C
-  , [ TP { tpName = "C"
-         , tpBnfcOptions = ["--c"]
-         , tpBuild = do
-             let flags = "CC_OPTS=-Wstrict-prototypes -Wno-sign-compare -Werror"
-             tpMake [flags]
-             tpMake [flags, "Skeleton.o"]
-         , tpRunTestProg = \ lang args -> do
-             bin <- baseTestProg lang
-             cmd bin args
-             -- Facility to check for memory leaks
-             -- cmd "valgrind" $
-             --     "--leak-check=full"  :
-             --     "--error-exitcode=1" :
-             --     "--errors-for-leak-kinds=definite" :
-             --     "--show-leak-kinds=definite" :
-             --     bin :
-             --     args
-         }
-    , cBase { tpName = "C (with line numbers)"
+  , [ cBase { tpName = "C (with line numbers)"
             , tpBnfcOptions = ["--c", "--line-numbers"] }
 
     ]
@@ -404,6 +507,8 @@ parameters = concat
                , tpBnfcOptions = ["--haskell", "--generic"] }
     , hsParams { tpName = "Haskell (with namespace)"
                , tpBnfcOptions = ["--haskell", "-p", "Language", "-d"] }
+    , haskellStartPosParameters
+    , haskellRangePosParameters
     ]
     -- Haskell/GADT
   , [ haskellGADTParameters ]
@@ -421,6 +526,8 @@ parameters = concat
     , javaParams { tpName = "Java (with jflex and line numbers)"
                  , tpBnfcOptions = ["--java", "--jflex", "-l"] }
     ]
+    -- Tree-sitter
+  , [ treeSitterParameters ]
   ]
   where
     base = baseParameters
@@ -438,12 +545,57 @@ parameters = concat
             class_ <- dropExtension <$> findFile "Test.class"
             cmd "java" $ "-Xss16M" : class_ : args
         }
-    ocaml =  TP
-        { tpName        = "OCaml"
-        , tpBuild       = tpMake ["OCAMLCFLAGS=-safe-string"]
-        , tpBnfcOptions = ["--ocaml"]
-        , tpRunTestProg = haskellRunTestProg
-        }
+
+-- | Run 'hlint' at current directory with certain hints ignored.
+hlintCheck :: Sh ()
+hlintCheck = cmd "hlint"
+  "-i" "Avoid lambda"
+  "-i" "Avoid lambda using `infix`"
+  "-i" "Eta reduce"
+  "-i" "Redundant bracket"
+  "-i" "Redundant lambda"
+  "-i" "Redundant $"
+  "-i" "Use camelCase"
+  "-i" "Use newtype instead of data"
+  "-i" "Use fmap"
+
+  -- Note: Newer hlint warns on the following code in ErrM.hs:
+  --   import Control.Monad       (MonadPlus(..))
+  --   #if __GLASGOW_HASKELL__ >= 808
+  --   import Control.Monad       (MonadFail(..))
+  --   #endif
+  "-i" "Use fewer imports"
+
+  "-i" "Unused LANGUAGE pragma"
+  "."
+
+-- | Invoke the Makefile with GHC-specific options.
+haskellBuild :: Sh ()
+haskellBuild = tpMake [ "GHC_OPTS=-XNoImplicitPrelude -Wall -Werror" ]
+
+-- Note (Commelina, 2026-03-06):
+--   Agda calls GHC with @-O@ flag (at least on 2026-03-06, v2.8.0),
+--   and requires the implicit @Prelude@ for compiling @MAlonzo\/\*@.
+--   To avoid slow re-compilation of @AbsXXX.hs@, we slightly altered
+--   the flags here.
+--
+--   If there is any further problem (for example, false negative
+--   without @-XNoImplicitPrelude@), please change the following flags.
+-- | Invoke the Makefile with GHC- and Agda- specific options.
+agdaBuild :: Sh ()
+agdaBuild = tpMake [ "GHC_OPTS=-Wall -Werror"
+                   , "AGDA_OPTS=--ghc-flag=-O0"
+                   ]
+
+-- | Haskell backend: default command for running the test executable with the given arguments.
+haskellRunTestProg :: FilePath -> [FilePath] -> Sh Text
+haskellRunTestProg _lang args = do
+      -- cmd "echo" "Looking for Test* binary"
+      -- -- can't print anything here because then the setStdin input is used up here
+      bin <- findFileRegex "Test[^.]*$"
+      -- cmd "echo" "Running" bin  -- ditto
+      -- print_stdout True $ print_stderr True $ do
+      cmd bin args
 
 -- | Helper function that runs bnfc with the context's options and an
 --   option to generate 'tpMakefile'.

@@ -2,6 +2,17 @@
 Backend Guide
 =============
 
+Global Options
+==============
+
+.. note::
+   For conflicting command line options, BNFC will always take the first (leftmost)
+   effective one. For example, in the following command::
+
+       bnfc --haskell --positions=start --positions=range Calc.cf
+
+   the generated files will follow flag ``--positions=start``.
+
 Agda Backend
 ============
 
@@ -38,6 +49,11 @@ Agda syntax trees (affects generated ``AST.agda``).  Relies on the
 primitive module ``Agda.Builtin.Maybe`` which is available from
 Agda 2.6.2.
 
+*Since 2.9.7:* Option ``--positions=range`` puts both the start
+and end position information into the Agda syntax trees
+(affects generated ``AST.agda``).  Relies on the primitive
+module ``Agda.Builtin.Maybe`` which is available from Agda 2.6.2.
+
 Java Backend
 ============
 
@@ -56,6 +72,31 @@ since 2.8.2 CUP version v11b.
    Otherwise, the first category defined in the grammar file will be used as the
    entry point for the grammar.
    If you need multiple entrypoints, use ANTLRv4.
+
+Prerequisites
+^^^^^^^^^^^^^
+
+For the Java/CUP backend you need:
+
+- Parser generator: `CUP <http://www2.cs.tum.edu/projects/cup/>`_ libraries version 0.11b.
+- Lexer generator `JFLex <https://jflex.de/>`_ or the `JLex <https://www.cs.princeton.edu/~appel/modern/java/JLex/>`_ libraries.
+
+To set up CUP and JLex, follow these instructions:
+
+1. Download the JAVA archives for
+   `CUP v11b <https://github.com/BNFC/bnfc/raw/master/testing/data/java-cup-11b.jar>`_,
+   `CUP v11b runtime <https://github.com/BNFC/bnfc/raw/master/testing/data/java-cup-11b-runtime.jar>`_,
+   and
+   `JLex <https://github.com/BNFC/bnfc/raw/master/testing/data/JLex-1.2.6.jar>`_.
+
+2. Make sure they are placed in your ``CLASSPATH``.
+
+   For example, in Linux or macOS, store these jars in ``${HOME}/java-lib/`` and add the following line to your shell initialization file::
+
+        export CLASSPATH=${CLASSPATH}\
+          :${HOME}/java-lib/java-cup-11b.jar\
+          :${HOME}/java-lib/java-cup-11b-runtime.jar\
+          :${HOME}/java-lib/JLex-1.2.6.jar
 
 ANTLRv4
 .......
@@ -132,6 +173,12 @@ This will leave the following files (and some more) in directory ``Calc``:
 
        class HasPosition a where
          hasPosition :: a -> Maybe (Int, Int)
+
+   *Since 2.9.7:* With ``--positions=range`` option, the generated
+   abstract syntax contains both the start and end position. Method ``hasPosition`` also returns both of them::
+
+       class HasPosition a where
+         hasPosition :: a -> Maybe ((Int, Int), (Int, Int))
 
 2. ``Print.hs``
 
@@ -211,6 +258,7 @@ Position Information
 With the ``--functor`` option, the generated abstract syntax will
 consist of data types with one parameter.  The first field of each
 constructor holds a value typed by this parameter.
+
 *Since 2.9.1:*
 E.g. for ``Calc`` the generated type is ``Exp' a`` with e.g. constructor
 :code:`ETimes a (Exp' a) (Exp' a)`.
@@ -224,6 +272,17 @@ generated parser.  The extra values then hold line and column number
 of the starting position of the syntax tree node in the parsed file.
 If no position is available, e.g., for an empty list, the value is
 ``Nothing``.
+
+*Since 2.9.7:*
+With the ``--positions=range`` option, the extra values hold both the starting
+and ending position of the syntax tree node in the parsed file, e.g.::
+
+    type Exp = Exp' (Maybe ((Int, Int), (Int, Int)))
+
+However, this option is not supported for layout grammars: the end position
+is always the same as the start one.
+
+*Since 2.9.7:* Option ``--functor`` is an alias to ``--positions=start`` now. If a string other than ``start`` and ``range`` is passed to ``--positions``, it will not carry any position information.
 
 In general, however, the extra values can be made to hold any kind of
 extra information attached to the abstract syntax.  E.g. one could

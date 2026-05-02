@@ -1,7 +1,68 @@
-# Unreleased
+# 2.9.7 (Unreleased)
+* Haskell: add `--positions=range` option to include both start and end position
+  [[#461](https://github.com/BNFC/bnfc/issues/461)]
+
+# 2.9.6.3
+
+Commelina <maosics@gmail.com>,  March 2026
+
+* C++: fixing a regression introduced in 2.9.6.2
+  - `std::to_string` is not compatible to `--ansi` standard
+    [[#534](https://github.com/BNFC/bnfc/issues/534)]
+* Pygments: fix escaping of non-alphanumeric characters in python regexes
+  [[#547](https://github.com/BNFC/bnfc/pull/547)]
+* Agda: the generated `Makefile` now accepts variable `AGDA_OPTS`
+  [[#544](https://github.com/BNFC/bnfc/pull/544)]
+
+Builds with GHC versions:
+* with `cabal`, GHC 8.0 - 9.12
+* with `stack`, GHC 8.4 - 9.12
+
+# 2.9.6.2
+
+Andreas Abel <andreas.abel@gu.se>,  January 2026
+
+* C: fix type of `lex_destroy`
+  [[#513](https://github.com/BNFC/bnfc/issues/513)]
+* C++: fixing 2 regressions introduced in 2.9.2
+  - `parse_error` exception not thrown
+    [[#493](https://github.com/BNFC/bnfc/issues/493)]
+  - entrypoint for file and string parsing should have same name (overloaded function)
+    [[#524](https://github.com/BNFC/bnfc/issues/524)]
+* txt2tags: remove extra closing bracket in `String` literal description in `Doc.txt`
+  [[#511](https://github.com/BNFC/bnfc/issues/511)]
+
+Builds with GHC versions:
+* with `cabal`, GHC 8.0 - 9.12
+* with `stack`, GHC 8.4 - 9.12
+
+# 2.9.6.1
+
+Andreas Abel <andreas.abel@gu.se>,  August 2025
+
+* Haskell: restore `LANGUAGE DeriveDataTypeable` in generated `Abs.hs`;
+  fixes regression in 2.9.6 [[#507](https://github.com/BNFC/bnfc/issues/507)]
+
+Builds with GHC versions:
+* with `cabal`, GHC 8.0 - 9.12
+* with `stack`, GHC 8.4 - 9.12
+
+
+# 2.9.6
+
+Andreas Abel <andreas.abel@gu.se>,  August 2025
 
 * C: preserve case in constructors (union): e.g. label `EInt` now is union member `eInt_` rather than `eint_`
   [[#479](https://github.com/BNFC/bnfc/issues/479)]
+* Haskell: lex ASCII 222 as upper rather than lower case letter
+  [[#497](https://github.com/BNFC/bnfc/issues/497)]
+* Haskell: no longer derive `Typeable` (obsolete since GHC 7.10)
+  [[#503](https://github.com/BNFC/bnfc/issues/503)]
+* Haskell: drop support for GHC 7, generated code needs at least GHC 8.0
+
+Builds with GHC versions:
+* with `cabal`, GHC 8.0 - 9.12
+* with `stack`, GHC 8.4 - 9.12
 
 # 2.9.5
 

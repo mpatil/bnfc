@@ -4,15 +4,15 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module BNFC.Options
   ( Mode(..), Target(..), Backend
-  , parseMode, usage, help, versionString
+  , parseMode, usage, help, title, versionString
   , SharedOptions(..)
   , defaultOptions, isDefault, printOptions
   , AlexVersion(..), HappyMode(..), OCamlParser(..), JavaLexerParser(..)
-  , RecordPositions(..), TokenText(..)
+  , RecordPositions(..), TokenText(..), Positions(..)
   , Ansi(..)
   , InPackage
   , removedIn290
@@ -40,7 +40,7 @@ import System.FilePath (takeBaseName)
 import Text.Printf     (printf)
 
 import Paths_BNFC      (version)
-import BNFC.CF         (CF)
+import BNFC.CF         (CF, catIdent)
 import BNFC.Utils      (unless)
 
 -- ~~~ Option data structures ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -52,7 +52,7 @@ data Mode
     -- e.g. invalid argument/combination of arguments
     = UsageError String
     -- Basic modes: print some info and exits
-    | Help | License | Version
+    | Help | License | Version | NumericVersion
     -- Normal mode, specifying the back end to use,
     -- the option record to be passed to the backend
     -- and the path of the input grammar file
@@ -121,6 +121,32 @@ data TokenText
   | TextToken        -- ^ Represent strings as @Data.Text@.
   deriving (Eq, Ord, Show)
 
+-- TODO: Unify this option (currently Haskell-specific) with other
+--       backends (e.g. @--line-numbers@ of C/C++/Java).
+-- | Make AST functorial or not in the Haskell backend? What is included?
+data Positions
+  = None  -- ^ Do not make AST functorial.
+  | Start -- ^ Option @--positions=start@ (or legacy @--functor@). Include the start position in AST.
+  | Range -- ^ Option @--positions=range@. Include the start and end position in AST.
+  | Line  -- ^ Option @--positions=line@. Currently not supported.
+  deriving (Eq, Ord)
+
+-- Used in 'printOptions'
+instance Show Positions where
+  show = \case
+    None  -> "none"
+    Start -> "start"
+    Range -> "range"
+    Line  -> "line"
+
+-- No need to write a full @Read@ instance
+-- Note: @line@ is currently not supported
+parsePositions :: String -> Maybe Positions
+parsePositions s
+  | s == "start" = Just Start
+  | s == "range" = Just Range
+  | otherwise    = Nothing
+
 -- | This is the option record that is passed to the different backends.
 data SharedOptions = Options
   --- Option shared by at least 2 backends
@@ -135,8 +161,8 @@ data SharedOptions = Options
   , ansi        :: Ansi            -- ^ Restrict to the ANSI language standard (C/C++)?
   --- Haskell specific:
   , inDir         :: Bool        -- ^ Option @-d@.
-  , functor       :: Bool        -- ^ Option @--functor@.  Make AST functorial?
-  , generic       :: Bool        -- ^ Option @--generic@.  Derive Data, Generic, Typeable?
+  , positions     :: Positions   -- ^ Options @--positions@ (or legacy @--functor@). Make AST functorial? What to include?
+  , generic       :: Bool        -- ^ Option @--generic@.  Derive Data and Generic?
   , alexMode      :: AlexVersion -- ^ Options @--alex@.
   , tokenText     :: TokenText   -- ^ Options @--bytestrings@, @--string-token@, and @--text-token@.
   , glr           :: HappyMode   -- ^ Happy option @--glr@.
@@ -149,6 +175,8 @@ data SharedOptions = Options
   --- C# specific
   , visualStudio  :: Bool        -- ^ Generate Visual Studio solution/project files.
   , wcf           :: Bool        -- ^ Windows Communication Foundation.
+  --- Tree-sitter specific
+  , treeSitterWord :: String     -- ^ Option @--tree-sitter-word@.
   } deriving (Eq, Ord, Show)
 
 -- We take this opportunity to define the type of the backend functions.
@@ -169,7 +197,7 @@ defaultOptions = Options
   , ansi            = BeyondAnsi
   -- Haskell specific
   , inDir           = False
-  , functor         = False
+  , positions       = None
   , generic         = False
   , alexMode        = Alex3
   , tokenText       = StringToken
@@ -183,6 +211,8 @@ defaultOptions = Options
   -- C# specific
   , visualStudio    = False
   , wcf             = False
+  --- Tree-sitter specific
+  , treeSitterWord  = catIdent
   }
 
 -- | Check whether an option is unchanged from the default.
@@ -226,7 +256,11 @@ printOptions opts = unwords . concat $
   , unlessDefault ansi opts $ const [ "--ansi" ]
   -- Haskell options:
   , [ "-d"                | inDir opts                          ]
-  , [ "--functor"         | functor opts                        ]
+
+    -- Note: For backwards compatibility.
+  , [ "--functor"         | positions opts == Start             ]
+
+  , [ "--positions=range" | positions opts == Range             ]
   , [ "--generic"         | generic opts                        ]
   , unlessDefault alexMode opts $ \ o -> [ printAlexOption o ]
   , [ "--bytestrings"     | tokenText opts == ByteStringToken   ]
@@ -284,10 +318,12 @@ printOCamlParserOption = ("--" ++) . \case
 -- ~~~ Option definition ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- This defines bnfc's "global" options, like --help
 globalOptions :: [ OptDescr Mode ]
-globalOptions = [
-  Option [] ["help"]                      (NoArg Help)         "show help",
-  Option [] ["license"]                   (NoArg License)      "show license",
-  Option [] ["version","numeric-version"] (NoArg Version)      "show version number"]
+globalOptions =
+  [ Option []    ["help"]               (NoArg Help)           "show help"
+  , Option []    ["license", "licence"] (NoArg License)        "show license"
+  , Option ['V'] ["version"]            (NoArg Version)        "show version information"
+  , Option []    ["numeric-version"]    (NoArg NumericVersion) "show just version number"
+  ]
 
 -- | Options for the target languages
 -- targetOptions :: [ OptDescr Target ]
@@ -379,11 +415,14 @@ specificOptions =
   , ( Option []    ["glr"] (NoArg (\o -> o {glr = GLR}))
           "Output Happy GLR parser [deprecated]"
     , haskellTargets )
-  , ( Option []    ["functor"] (NoArg (\o -> o {functor = True}))
-          "Make the AST a functor and use it to store the position of the nodes"
+  , ( Option []    ["functor"] (NoArg (\o -> o {positions = Start}))
+          "Make the AST a functor and use it to store the start position of the nodes (alias to --positions=start)"
+    , haskellTargets )
+  , ( Option []    ["positions"] (ReqArg (\s o -> o {positions = fromMaybe None (parsePositions s)}) "start|range")
+          "Make the AST a functor and set what to include in the nodes"
     , haskellTargets )
   , ( Option []    ["generic"] (NoArg (\o -> o {generic = True}))
-          "Derive Data, Generic, and Typeable instances for AST types"
+          "Derive Data and Generic instances for AST types"
     , haskellTargets )
   , ( Option []    ["xml"] (NoArg (\o -> o {xml = 1}))
           "Also generate a DTD and an XML printer"
@@ -395,6 +434,10 @@ specificOptions =
   , ( Option []    ["agda"] (NoArg (\o -> o { agda = True, tokenText = TextToken }))
           "Also generate Agda bindings for the abstract syntax"
     , [TargetHaskell] )
+  -- Tree-sitter backend:
+  , ( Option []    ["tree-sitter-word"] (ReqArg (\x o -> o { treeSitterWord = x }) "TOKEN")
+          "Use the given BNFC symbol as tree-sitter's \"word\" token"
+    , [TargetTreeSitter] )
   ]
 
 -- | The list of specific options for a target.
@@ -444,8 +487,8 @@ title =
 usage :: String
 usage = unlines
   [ "usage: bnfc [--TARGET] [OPTIONS] LANG.cf"
-  , "   or: bnfc --[numeric-]version"
-  , "   or: bnfc [--license]"
+  , "   or: bnfc [-V|--version|--numeric-version]"
+  , "   or: bnfc --license"
   , "   or: bnfc [--help]"
   ]
 
@@ -457,7 +500,7 @@ help = unlines $ title ++
     , usageInfo "TARGET languages" targetOptions
     ] ++ map targetUsage helpTargets
   where
-  helpTargets = [ TargetHaskell, TargetJava, TargetC, TargetCpp ]
+  helpTargets = [ TargetHaskell, TargetJava, TargetC, TargetCpp, TargetTreeSitter ]
   targetUsage t = usageInfo
     (printf "Special options for the %s backend" (show t))
     (specificOptions' t)
@@ -666,5 +709,4 @@ translateOldOptions = mapM $ \ o -> do
     , ("-generic"             , "--generic")
     , ("--ghc"                , "--generic")
     , ("--deriveGeneric"      , "--generic")
-    , ("--deriveDataTypeable" , "--generic")
     ]

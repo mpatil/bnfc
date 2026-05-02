@@ -3,8 +3,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PatternSynonyms #-}
 
-{-# OPTIONS_GHC -fno-warn-orphans #-}  -- ghc 7.10
-
 module BNFC.Utils
     ( ModuleName
     , when, unless, unlessNull, unlessNull'
@@ -22,6 +20,7 @@ module BNFC.Utils
     , lowerCase, upperCase, mixedCase
     , camelCase, camelCase_
     , snakeCase, snakeCase_
+    , kebabCase, kebabCase_
     , replace
     , writeFileRep
     , cstring
@@ -56,18 +55,6 @@ type List1 = List1.NonEmpty
 type ModuleName = String
 
 -- * Control flow.
-
--- ghc 7.10 misses the instance Monoid a => Monoid (IO a)
-
-#if __GLASGOW_HASKELL__ <= 710
-instance {-# OVERLAPPING #-} Semigroup (IO ()) where
-  (<>) = (>>)
-
-instance {-# OVERLAPPING #-} Monoid (IO ()) where
-  mempty  = return ()
-  mappend = (<>)
-  mconcat = sequence_
-#endif
 
 -- | Generalization of 'Control.Monad.when'.
 when :: Monoid m => Bool -> m -> m
@@ -315,6 +302,7 @@ data NameStyle
   = LowerCase  -- ^ e.g. @lowercase@
   | UpperCase  -- ^ e.g. @UPPERCASE@
   | SnakeCase  -- ^ e.g. @snake_case@
+  | KebabCase  -- ^ e.g. @kebab-case@
   | CamelCase  -- ^ e.g. @CamelCase@
   | MixedCase  -- ^ e.g. @mixedCase@
   | OrigCase   -- ^ Keep original capitalization and form.
@@ -355,8 +343,9 @@ data NameStyle
 mkName :: [String] -> NameStyle -> String -> String
 mkName reserved style s = notReserved name'
   where
+    suffix = if style == KebabCase then "-" else "_"
     notReserved name
-      | name `elem` reserved = notReserved (name ++ "_")
+      | name `elem` reserved = notReserved (name ++ suffix)
       | otherwise = name
     tokens = parseIdent s
     name' = case style of
@@ -365,6 +354,7 @@ mkName reserved style s = notReserved name'
         CamelCase -> concatMap capitalize tokens
         MixedCase -> mapHead toLower $ concatMap capitalize tokens
         SnakeCase -> map toLower $ intercalate "_" tokens
+        KebabCase -> map toLower $ intercalate "-" tokens
         OrigCase  -> s
 
 -- | Make first letter uppercase.
@@ -498,6 +488,12 @@ snakeCase = text . snakeCase_
 
 snakeCase_ :: String -> String
 snakeCase_ = mkName [] SnakeCase
+
+kebabCase :: String -> Doc
+kebabCase = text . kebabCase_
+
+kebabCase_ :: String -> String
+kebabCase_ = mkName [] KebabCase
 
 -- ESCAPING
 
