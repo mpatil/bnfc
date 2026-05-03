@@ -22,6 +22,9 @@ spec = do
   describe "Backend monad" $ do
     it "empty computation generates empty list of files" $
       execBackend (return ()) `shouldReturn` []
+    it "marks mkfileOnce outputs as write-once" $
+      execBackend (mkfileOnce "test.txt" id "abcd") `shouldReturn`
+        [GeneratedFile "test.txt" id True "abcd\n"]
     -- -- Test broken: mkfile also puts the BNFC signature containing the version number.
     -- it "returns the file created using mkfile" $
     --   execBackend (mkfile "test.txt" "abcd")
@@ -55,3 +58,20 @@ spec = do
         setCurrentDirectory tmpdir
         writeFiles "root/" (mkfile "foo/bar.txt" id "abcd")
         doesFileExist "root/foo/bar.txt" `shouldReturn` True
+    it "creates a missing file for mkfileOnce" $
+      withSystemTempDirectory "bnfc-test" $ \tmpdir -> do
+        setCurrentDirectory tmpdir
+        writeFiles "." (mkfileOnce "file.txt" id "fresh")
+        readFile "file.txt" >>= (`shouldSatisfy` isInfixOf "fresh\n")
+    it "preserves an existing file for mkfileOnce" $
+      withSystemTempDirectory "bnfc-test" $ \tmpdir -> do
+        setCurrentDirectory tmpdir
+        writeFile "file.txt" "user content\n"
+        writeFiles "." (mkfileOnce "file.txt" id "generated")
+        readFile "file.txt" `shouldReturn` "user content\n"
+    it "still overwrites an existing file for mkfile" $
+      withSystemTempDirectory "bnfc-test" $ \tmpdir -> do
+        setCurrentDirectory tmpdir
+        writeFile "file.txt" "user content\n"
+        writeFiles "." (mkfile "file.txt" id "generated")
+        readFile "file.txt" >>= (`shouldSatisfy` isInfixOf "generated\n")

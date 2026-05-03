@@ -50,7 +50,10 @@ mkUserHFile inPackage cf name = unlines
   , ""
   , "/* User interpreter declarations."
   , "   This file is generated once and then preserved."
-  , "   Add semantic state, helper classes, and method declarations here. */"
+  , "   Add semantic state, helper classes, scope/environment logic,"
+  , "   and method declarations here."
+  , "   Keep generic reusable runtime helpers in the generated package"
+  , "   support instead of embedding them here. */"
   , nsStart inPackage
   , "class Interp extends InterpBase;"
   , unlines ["  extern virtual task visit" ++ b ++ "(" ++ b ++ " p);" |
@@ -113,8 +116,11 @@ userHeaderC :: SVConfig -> String
 userHeaderC cfg = unlines
   [ "/*******************************************************/"
   , "/* User interpreter extension points."
-   , "   This file is generated once and then preserved."
-  , "   Override the visit methods below with your semantics. */"
+  , "   This file is generated once and then preserved."
+  , "   Override the visit methods below with your semantics."
+  , "   Simulator-specific casts, delay expressions, and other"
+  , "   VCS-compatibility adjustments required by those semantics"
+  , "   stay in this preserved file instead of generated scaffolding. */"
   , ""
   , "`include \"" ++ svInterpHeaderPath cfg ++ "\""
   ]

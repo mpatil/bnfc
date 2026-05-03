@@ -85,6 +85,10 @@ spec = describe "SV backend FuseSoC core file" $ do
     core <- getCore
     core `shouldContain'` "default_tool: vcs"
 
+  it "uses test as the test-target toplevel" $ do
+    core <- getCore
+    core `shouldContain'` "toplevel: test"
+
   it "exposes the input plusarg parameter" $ do
     core <- getCore
     core `shouldContain'` "input:"

@@ -109,6 +109,11 @@ spec = describe "SV backend interpreter ownership" $ do
       g <- findFile (userH calcCfg) =<< runBackend
       writeOnce g `shouldBe` True
 
+    it "documents that semantic state belongs in the user header" $ do
+      g <- findFile (userH calcCfg) =<< runBackend
+      fileContent g `shouldContain'` "Add semantic state, helper classes, scope/environment logic,"
+      fileContent g `shouldContain'` "Keep generic reusable runtime helpers in the generated package"
+
     it "declares Interp extending InterpBase" $ do
       g <- findFile (userH calcCfg) =<< runBackend
       fileContent g `shouldContain'` "class Interp extends InterpBase;"
@@ -122,9 +127,21 @@ spec = describe "SV backend interpreter ownership" $ do
       g <- findFile (userC calcCfg) =<< runBackend
       writeOnce g `shouldBe` True
 
+    it "documents that simulator-specific semantic fixes stay user-owned" $ do
+      g <- findFile (userC calcCfg) =<< runBackend
+      fileContent g `shouldContain'` "Simulator-specific casts, delay expressions, and other"
+      fileContent g `shouldContain'` "stay in this preserved file instead of generated scaffolding."
+
     it "delegates to super for each visit method" $ do
       g <- findFile (userC calcCfg) =<< runBackend
       fileContent g `shouldContain'` "super.visitExp"
+
+    it "does not bake semantic-specific VCS casts into generated scaffolding" $ do
+      g <- findFile (userC calcCfg) =<< runBackend
+      fileContent g `shouldNotContain` "time'("
+      fileContent g `shouldNotContain` ".itoa("
+      fileContent g `shouldNotContain` ".hextoa("
+      fileContent g `shouldNotContain` ".bintoa("
 
   describe "preservation semantics on disk" $ do
     it "preserves a pre-existing user-edited Interp.svh across regeneration" $
