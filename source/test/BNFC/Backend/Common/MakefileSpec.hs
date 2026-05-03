@@ -15,6 +15,6 @@ spec = do
       let opts = defaultOptions { optMake = Just "MyMakefile" } in
       execBackend (mkMakefile (optMake opts) (const "")) >>=
         (`shouldSatisfy` \case
-           [ GeneratedFile "MyMakefile" _ "" ] -> True
+           [ GeneratedFile "MyMakefile" _ _ "" ] -> True
            _ -> False
         )

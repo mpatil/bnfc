@@ -31,7 +31,7 @@ makefile cfg _ basename = vcat $
         [ svAbsynHeaderPath cfg, svAbsynImplPath cfg
         , svLexerPath cfg, svParserPath cfg
         , svPrinterImplPath cfg, svPrinterHeaderPath cfg
-        , svInterpImplPath cfg, svInterpHeaderPath cfg
+        , svInterpBaseImplPath cfg, svInterpBaseHeaderPath cfg
         , "Test.sv", svPackagePath cfg
         , svCorePath cfg, "comp.log", "vcs.log", "modelsim.ini"
         , svDir cfg ++ "/*.bak", "y.output"

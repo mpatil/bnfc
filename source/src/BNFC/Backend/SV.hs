@@ -32,9 +32,11 @@ makeSV opts cf = do
     mkfile (svLexerPath cfg) commentWithEmacsModeHint flex
     let bison = cf2Yacc (linenumbers opts) (inPackage opts) name cf env
     mkfile (svParserPath cfg) commentWithEmacsModeHint bison
-    let (skelH, skelC) = cf2Interp (inPackage opts) name cf
-    mkfile (svInterpHeaderPath cfg) commentWithEmacsModeHint skelH
-    mkfile (svInterpImplPath cfg) commentWithEmacsModeHint skelC
+    let (baseH, baseC, userH, userC) = cf2Interp (inPackage opts) name cf
+    mkfile (svInterpBaseHeaderPath cfg) commentWithEmacsModeHint baseH
+    mkfile (svInterpBaseImplPath cfg) commentWithEmacsModeHint baseC
+    mkfileOnce (svInterpHeaderPath cfg) commentWithEmacsModeHint userH
+    mkfileOnce (svInterpImplPath cfg) commentWithEmacsModeHint userC
     let (prinH, prinC) = cf2SVPrinter True (inPackage opts) name cf
     mkfile (svPrinterHeaderPath cfg) commentWithEmacsModeHint prinH
     mkfile (svPrinterImplPath cfg) commentWithEmacsModeHint prinC
