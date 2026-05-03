@@ -41,7 +41,6 @@ makefile cfg _ basename = vcat $
     , mkRule (svDir cfg ++ "/" ++ svUpperName cfg ++ "Lexer.svh") [ svLexerPath cfg ]
       [ "${SVLEX} ${SVLEX_OPTS} " ++ svLexerPath cfg
       , "mv lex.yy.v " ++ svDir cfg ++ "/" ++ svUpperName cfg ++ "Lexer.svh"
-      , "sed -i 's/`define yymore() (yymorfg=1)/`define yymore yymorfg=1/' " ++ svDir cfg ++ "/" ++ svUpperName cfg ++ "Lexer.svh"
       ]
     , mkRule (svDir cfg ++ "/" ++ svUpperName cfg ++ "Parser.svh") [ svParserPath cfg ]
       [ "${SVACC} ${SVACC_OPTS} " ++ svParserPath cfg
