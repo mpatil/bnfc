@@ -2,8 +2,8 @@
 
 module BNFC.Backend.SV.CFtoAbs (cf2SVAbs) where
 
-import Data.List
-import Data.Char(toLower, isUpper, toUpper)
+import Data.Char(toLower, isUpper)
+import Data.List (intercalate, intersperse)
 
 import BNFC.CF
 import BNFC.Options (RecordPositions(..))
@@ -11,6 +11,7 @@ import BNFC.TypeChecker ( ListConstructors(..), buildContext, isToken )
 import BNFC.Utils((+++))
 import BNFC.Backend.Common.OOAbstract
 
+import BNFC.Backend.SV.Config
 import BNFC.Backend.SV.Naming
 import BNFC.Backend.SV.Utils
 
@@ -27,8 +28,8 @@ cf2SVAbs rp inPackage name cf = (mkHFile rp inPackage cab name cf, mkCFile inPac
 mkHFile :: RecordPositions -> Maybe String -> CAbs -> String -> CF -> String
 mkHFile rp inPackage cabs name cf = unlines
  [
-  "`ifndef " ++ (map toUpper name) ++ "_" ++ hdef,
-  "`define " ++ (map toUpper name) ++ "_" ++ hdef,
+  "`ifndef " ++ svUpperName cfg ++ "_" ++ hdef,
+  "`define " ++ svUpperName cfg ++ "_" ++ hdef,
   "",
   "typedef interface class Visitor;",
   "",
@@ -52,9 +53,10 @@ mkHFile rp inPackage cabs name cf = unlines
   definedRules (Just $ LC nil cons) cf
   "/********************   Defined Constructors    ********************/",
   nsEnd inPackage,
-  "`endif // " ++ (map toUpper name) ++ "_" ++ hdef
+  "`endif // " ++ svUpperName cfg ++ "_" ++ hdef
  ]
  where
+  cfg = mkSVConfig inPackage name
   classes = allClasses cabs
   hdef = nsDefine inPackage "ABSYN_HEADER"
   nil  t = (,dummyType) $ concat [ "new List", identType t, "()" ]
@@ -104,7 +106,7 @@ prCon (c,(f,cs)) = unlines [
    extends | c == "Visitable" = " implements "
            | otherwise = " extends "
    conargs = concat $ intersperse ", "
-     [x +++ ("p" ++ show i) | ((x,_,_),i) <- zip cs [1..]]
+     [x +++ ("p" ++ show i) | ((x,_,_),i) <- zip cs [1 :: Int ..]]
 
 prList :: (String,Bool) -> String
 prList (c,b) = unlines [
@@ -121,15 +123,17 @@ prList (c,b) = unlines [
 
 mkCFile :: Maybe String -> CAbs -> String -> CF -> String
 mkCFile inPackage cabs name _ = unlines $ [
-  "`ifndef " ++ (map toUpper name) ++ "_ABSYN_SV",
-  "`define " ++ (map toUpper name) ++ "_ABSYN_SV",
-  "`include \"" ++ name ++ "/" ++ (map toUpper name) ++ "Absyn.svh\"",
+  "`ifndef " ++ svAbsynSvGuard cfg,
+  "`define " ++ svAbsynSvGuard cfg,
+  "`include \"" ++ svAbsynHeaderPath cfg ++ "\"",
   nsStart inPackage,
   unlines [prConC  r | (_,rs) <- signatures cabs, r <- rs],
   unlines [prListC c | (c,_) <- listtypes cabs],
   nsEnd inPackage,
   "`endif"
   ]
+  where
+    cfg = mkSVConfig inPackage name
 
 prConC :: CAbsRule -> String
 prConC fcs@(f,_) = unlines [
@@ -165,7 +169,7 @@ prConstructorC (f,cs) = unlines [
   ]
  where
    cvs = [c | (_,_,c) <- cs]
-   pvs = ['p' : show i | ((_,_,_),i) <- zip cs [1..]]
+   pvs = ['p' : show i | ((_,_,_),i) <- zip cs [1 :: Int ..]]
    conargs = intercalate ", "
      [x +++ v | ((x,_,_),v) <- zip cs pvs]
 
@@ -209,7 +213,7 @@ definedRules mlc cf banner
         svDecl lc exp =
           case exp of
             App x _ es
-              | isUpper (head x) -> unlines $ map decl $ zip [0..] es
+              | startsWithUpper x -> unlines $ map decl $ zip [0..] es
               | otherwise        -> error $ " //ERROR: " ++ show x -- ++ " :: " ++ show es
             _ -> ""
           where
@@ -217,7 +221,7 @@ definedRules mlc cf banner
           decl (idx, e) =
             case e of
               App y (FunT _ t) _
-                | isUpper (head y) -> "  automatic " ++ show t ++ " p" ++ show idx ++ " = " ++ svExp lc [] e ++ ";"
+                | startsWithUpper y -> "  automatic " ++ show t ++ " p" ++ show idx ++ " = " ++ svExp lc [] e ++ ";"
                 | otherwise        -> "//"
               _ -> ""
 
@@ -233,7 +237,7 @@ definedRules mlc cf banner
               | isToken t ctx  -> loop (-1, e)
             (i, App x _ es)
               | i >= 0           -> "p" ++ show i
-              | isUpper (head x) -> call (x ++ "::new") es
+              | startsWithUpper x -> call (x ++ "::new") es
               | x `elem` args    -> call (x ++ "_") es
               | otherwise        -> call (sanitizeSV x) es
             (_, LitInt n)      -> show n
@@ -242,3 +246,7 @@ definedRules mlc cf banner
             (_, LitString s)   -> show s
 
           call x es = x ++ "(" ++ intercalate ", " (map loop (zip [0..] es)) ++ ")"
+
+startsWithUpper :: String -> Bool
+startsWithUpper (x:_) = isUpper x
+startsWithUpper [] = False

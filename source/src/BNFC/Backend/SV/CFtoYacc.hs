@@ -14,7 +14,7 @@ module BNFC.Backend.SV.CFtoYacc
 
 import Prelude hiding ((<>))
 
-import Data.Char       ( toLower, isUpper, toUpper)
+import Data.Char       ( toLower )
 import Data.Foldable   ( toList )
 import Data.List       (nub, intercalate)
 import qualified Data.Map as Map
@@ -23,10 +23,11 @@ import BNFC.CF
 import BNFC.Backend.Common.NamedVariables hiding (varName)
 import BNFC.PrettyPrint
 import BNFC.Options (RecordPositions(..), InPackage)
-import BNFC.Utils ((+++), table, applyWhen, for, when)
+import BNFC.Utils ((+++), table, applyWhen, for)
 
 import BNFC.Backend.C.CFtoBisonC (startSymbol)
 
+import BNFC.Backend.SV.Config
 import BNFC.Backend.SV.Naming
 import BNFC.Backend.SV.Utils
 
@@ -77,13 +78,13 @@ header inPackage name cf = unlines
     [ "/*************************************************/"
     , "%{"
     , "`ifndef " ++ absynHeaderGuard
-    , "`include \"" ++ name ++ "/" ++ (map toUpper name) ++ "Absyn.svh\""
+    , "`include \"" ++ svAbsynHeaderPath cfg ++ "\""
     , "`endif"
     , "`include \"bio.svh\""
     , ""
     , "class Parser;"
     , "  Biobuf b;"
-    , "`include \"" ++ name ++ "/" ++ (map toUpper name) ++ "Lexer.svh\""
+    , "`include \"" ++ svDir cfg ++ "/" ++ svUpperName cfg ++ "Lexer.svh\""
     , ""
     , "typedef struct { int i; } YY_BUFFER_STATE;"
     , ""
@@ -97,8 +98,9 @@ header inPackage name cf = unlines
     , "%}"
     ]
   where
+    cfg  = mkSVConfig inPackage name
     ns   = nsString inPackage
-    absynHeaderGuard = map toUpper name ++ "_ABSYN_HEADER"
+    absynHeaderGuard = svUpperName cfg ++ "_ABSYN_HEADER"
     eps  = toList (allEntryPoints cf) ++ map TokenCat (positionCats cf)
     dats = nub $ map normCat eps
 
@@ -130,7 +132,7 @@ errorHandler _ = unlines
 -- | Parser entry point code.
 --
 entryCode :: Maybe String -> String -> CF -> String
-entryCode inPackage name cf = unlines $ map (parseMethod inPackage name cf) eps
+entryCode inPackage name cf = unlines $ map (parseMethod inPackage name) eps
   where
   eps = toList (allEntryPoints cf)
 
@@ -147,8 +149,8 @@ parseResult cat =
   cat' = identCat cat
 
 --This generates a parser method for each entry point.
-parseMethod :: Maybe String -> String -> CF -> Cat -> String
-parseMethod _ _ cf cat = unlines $ concat
+parseMethod :: Maybe String -> String -> Cat -> String
+parseMethod _ _ cat = unlines $ concat
   [ [ unwords [ "/* Entrypoint: parse", dat, "from file. */" ]
     , "function " ++ cat' ++ " p" ++ parser ++ "(string filename);"
     ]
@@ -269,6 +271,7 @@ specialToks cf = concat
 
 --The following functions are a (relatively) straightforward translation
 --of the ones in CFtoHappy.hs
+rulesForYacc :: RecordPositions -> Maybe String -> CF -> Map.Map SymKey Pattern -> Rules
 rulesForYacc rp inPackage cf env = map mkOne (ruleGroups cf) ++ posRules
   where
   mkOne (cat,rules) = constructRule rp inPackage cf env rules cat
@@ -306,12 +309,13 @@ generateAction :: IsFun a => RecordPositions -> InPackage -> String -> a -> Bool
 generateAction rp inPackage nt f b mbs = reverses ++
   if | isCoercion f    -> concat ["$$ = ", unwords ms, ";", loc]
      | isNilFun f      -> concat ["$$ = ", scope, nt, "::new();"]
-     | isOneFun f      -> concat ["$$ = ", scope, nt, "::new(); $$.v.push_back(", head ms, ");"]
+     | isOneFun f      -> concat ["$$ = ", scope, nt, "::new(); $$.v.push_back(", oneMeta, ");"]
      | isConsFun f     -> concat [lst, ".v.push_back(", el, "); $$ = ", lst, ";"]
      | isDefinedRule f -> concat ["$$ = ", scope, sanitizeSV (funName f), "_", "(", intercalate ", " ms, ");" ]
      | otherwise       -> concat ["$$ = ", scope, funName f, "::new ", "(", intercalate ", " ms, ");", loc]
  where
   ms        = map fst mbs
+  oneMeta   = exactlyOne "generateAction/isOneFun" ms
   -- The following match only happens in the cons case:
   [el, lst] = applyWhen b reverse ms  -- b: left-recursion transformed?
 
@@ -321,8 +325,6 @@ generateAction rp inPackage nt f b mbs = reverses ++
             = ""
   reverses = unwords [ m ++ ".v.reverse ;" | (m,True) <- mbs]
   scope     = nsScope inPackage
-  new :: String -> String
-  new  = \ s -> if isUpper (head s) then "::new " ++ s else sanitizeSV s
 
 -- Generate patterns and a set of metavariables indicating
 -- where in the pattern the non-terminal
@@ -372,3 +374,7 @@ typeName "Char" = "_CHAR_"
 typeName "Integer" = "_INTEGER_"
 typeName "Double" = "_DOUBLE_"
 typeName x = x
+
+exactlyOne :: String -> [a] -> a
+exactlyOne _ [x] = x
+exactlyOne ctx _ = error $ ctx ++ ": expected exactly one element"

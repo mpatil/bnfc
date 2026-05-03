@@ -280,9 +280,18 @@ library
 
     -- SV backend
     BNFC.Backend.SV
+    BNFC.Backend.SV.Config
+    BNFC.Backend.SV.FuseSoC
+    BNFC.Backend.SV.Package
     BNFC.Backend.SV.PrettyPrinter
+    BNFC.Backend.SV.PrettyPrinter.Header
+    BNFC.Backend.SV.PrettyPrinter.Impl
+    BNFC.Backend.SV.PrettyPrinter.Render
+    BNFC.Backend.SV.PrettyPrinter.Visitors
     BNFC.Backend.SV.Makefile
+    BNFC.Backend.SV.Makefile.Simulator
     BNFC.Backend.SV.Naming
+    BNFC.Backend.SV.Testbench
     BNFC.Backend.SV.CFtoYacc
     BNFC.Backend.SV.CFtoAbs
     BNFC.Backend.SV.Utils

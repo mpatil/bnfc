@@ -6,6 +6,7 @@ import Data.Char(toLower, toUpper)
 import BNFC.CF
 import BNFC.Utils ((+++))
 import BNFC.Backend.Common.OOAbstract
+import BNFC.Backend.SV.Config
 import BNFC.Backend.SV.Naming
 import BNFC.Backend.SV.Utils
 
@@ -20,9 +21,9 @@ cf2Interp inPackage name cf = (mkHFile inPackage cab name, mkCFile inPackage cab
 --Generates the Header File
 mkHFile :: Maybe String -> CAbs -> String -> String
 mkHFile inPackage cf name = unlines [
-  "`ifndef " ++ (map toUpper name) ++ "_"  ++ hdef,
-  "`define " ++ (map toUpper name) ++ "_"  ++ hdef,
-  "`include \"" ++ name ++ "/" ++ (map toUpper name) ++ "Absyn.svh\"",
+  "`ifndef " ++ svUpperName cfg ++ "_"  ++ hdef,
+  "`define " ++ svUpperName cfg ++ "_"  ++ hdef,
+  "`include \"" ++ svAbsynHeaderPath cfg ++ "\"",
   nsStart inPackage,
   "class Interp implements Visitor;",
   unlines ["  extern virtual task visit" ++ b ++ "(" ++ b ++ " p);" |
@@ -36,6 +37,7 @@ mkHFile inPackage cf name = unlines [
   "`endif"
  ]
  where
+   cfg = mkSVConfig inPackage name
    hdef = nsDefine inPackage "INTERP_HEADER"
    classes = allClasses cf
    basics = tokentypes cf ++ map fst svbasetypes
