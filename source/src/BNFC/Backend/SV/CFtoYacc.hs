@@ -151,7 +151,8 @@ parseResult cat =
 --This generates a parser method for each entry point.
 parseMethod :: Maybe String -> String -> Cat -> String
 parseMethod _ _ cat = unlines $ concat
-  [ [ unwords [ "/* Entrypoint: parse", dat, "from file. */" ]
+  [ [ "`ifdef DEFINE_ENTRYPOINTS",
+      unwords [ "/* Entrypoint: parse", dat, "from file. */" ]
     , "function " ++ cat' ++ " p" ++ parser ++ "(string filename);"
     ]
   , body False
@@ -162,6 +163,7 @@ parseMethod _ _ cat = unlines $ concat
     ]
   , body True
   , [ "endfunction" ]
+  , [ "`endif" ]
   ]
   where
   cat' = identCat (normCat cat)
